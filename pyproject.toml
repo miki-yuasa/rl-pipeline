@@ -5,7 +5,14 @@ description = "Experiment tools for streamlined RL experiment management"
 readme = "README.md"
 authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
 requires-python = ">=3.11"
-dependencies = ["numpy>=2.0.0", "pydantic>=2.0.0"]
+dependencies = ["numpy>=2.0.0", "pydantic>=2.0.0", "pyyaml>=6.0.0"]
+
+[project.optional-dependencies]
+gymnasium = ["gymnasium>=1.0.0"]
+sb3 = ["stable-baselines3>=2.0.0", "gymnasium>=1.0.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "gymnasium>=1.0.0", "stable-baselines3>=2.0.0"]
 
 [build-system]
 requires = ["hatchling"]
