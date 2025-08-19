@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class EnvLoader:
+class BaseEnvLoader:
     def __init__(self, config: BaseModel) -> None:
         self.config = config
 
@@ -22,7 +22,7 @@ class EnvLoader:
         raise NotImplementedError("Subclasses must implement this method.")
 
 
-class ModelLoader:
+class BaseModelLoader:
     def __init__(self, config: BaseModel) -> None:
         self.config = config
 
