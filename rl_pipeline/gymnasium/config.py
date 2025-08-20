@@ -45,7 +45,7 @@ class MakeEnvConfig(BaseModel):
 
 class WrapperConfig(BaseModel):
     wrapper_class: type[Wrapper]
-    wrapper_args: dict[str, Any] = {}
+    wrapper_kwargs: dict[str, Any] = {}
 
 
 class GymEnvConfig(BaseModel):

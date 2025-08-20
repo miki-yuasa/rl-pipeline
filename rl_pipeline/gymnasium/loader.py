@@ -27,7 +27,7 @@ class GymEnvLoader(
         if self.config.wrapper_config:
             wrapped_env: Wrapper[WrapperObsType, WrapperActType, ObsType, ActType] = (
                 self.config.wrapper_config.wrapper_class(
-                    env, **self.config.wrapper_config.wrapper_args
+                    env, **self.config.wrapper_config.wrapper_kwargs
                 )
             )
             return wrapped_env
