@@ -59,3 +59,4 @@ class SB3PipelineConfig(BaseModel):
     vec_config: MakeVecEnvConfig
     algo_config: SB3AlgorithmConfig
     learn_config: SB3LearnConfig
+    callback_configs: SB3CallbackConfigs
