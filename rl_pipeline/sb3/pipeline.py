@@ -7,18 +7,11 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.evaluation import evaluate_policy
 
 from rl_pipeline.core.config import SaveConfig
+from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
-from rl_pipeline.eval.stats import PolicyEvalStats
-from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
-from rl_pipeline.utils.io import add_number_to_existing_filepath
+from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .config import (
-    MakeVecEnvConfig,
-    SB3AlgorithmConfig,
-    SB3CallbackConfigs,
-    SB3LearnConfig,
-    SB3PipelineConfig,
-)
+from .config import SB3CallbackConfigs, SB3LearnConfig, SB3PipelineConfig
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
 
