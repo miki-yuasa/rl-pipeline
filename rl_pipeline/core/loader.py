@@ -5,7 +5,7 @@ class BaseEnvLoader:
     def __init__(self, config: BaseModel) -> None:
         self.config = config
 
-    def train_env(self):
+    def env(self):
         """Return the environment make configuration."""
         raise NotImplementedError("Subclasses must implement this method.")
 
@@ -13,7 +13,7 @@ class BaseEnvLoader:
         """Return the evaluation environment make configuration."""
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def train_vec_env(self):
+    def vec_env(self):
         """Return the vectorized environment make configuration."""
         raise NotImplementedError("Subclasses must implement this method.")
 
