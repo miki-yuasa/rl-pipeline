@@ -28,10 +28,6 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
         super().__init__(config, verbose=verbose)
 
         self.save_config: SaveConfig = config.save_config
-        self.env_config: MakeEnvConfig = config.env_config
-        self.wrapper_config: WrapperConfig = config.wrapper_config
-        self.vec_config: MakeVecEnvConfig = config.vec_config
-        self.algo_config: SB3AlgorithmConfig = config.algo_config
         self.learn_config: SB3LearnConfig = config.learn_config
         self.callback_configs: SB3CallbackConfigs = config.callback_configs
 

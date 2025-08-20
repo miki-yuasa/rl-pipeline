@@ -1,19 +1,12 @@
 import os
-from typing import Any, Generic, Literal, Self, TypeVar
+from typing import Any, Generic, Literal, Self
 
 import yaml
-from pydantic import BaseModel
 
-from rl_pipeline.core.loader import (
-    BaseEnvLoader,
-    BaseModelLoader,
-    EnvLoaderType,
-    ModelLoaderType,
-)
-from rl_pipeline.eval import PolicyEvalStats
-from rl_pipeline.utils.io import get_class
-
-ConfigType = TypeVar("ConfigType", bound=BaseModel)
+from rl_pipeline.core.eval import PolicyEvalStats
+from rl_pipeline.core.loader import EnvLoaderType, ModelLoaderType
+from rl_pipeline.core.typing import ConfigType
+from rl_pipeline.core.utils.io import get_class
 
 
 class BasePipeline(Generic[ConfigType, EnvLoaderType, ModelLoaderType]):

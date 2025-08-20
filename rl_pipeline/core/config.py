@@ -3,7 +3,8 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, computed_field
 
-from rl_pipeline.utils.io import replace_extension
+from rl_pipeline.core.typing import ConfigType
+from rl_pipeline.core.utils.io import replace_extension
 
 
 class SaveConfig(BaseModel):
@@ -27,9 +28,6 @@ class SaveConfig(BaseModel):
     def model_full_name(self) -> str:
         # model_save_path - model_save_dir
         return os.path.basename(self.model_save_path)
-
-
-ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
 class ConfigReader(Generic[ConfigType]):
