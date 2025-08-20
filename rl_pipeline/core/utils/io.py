@@ -2,7 +2,9 @@ import importlib
 import os
 from typing import Literal
 
-from pydantic import BaseModel
+import yaml
+
+from ..typing import ConfigType
 
 
 def format_large_number(timesteps: int) -> str:
@@ -128,4 +130,10 @@ def get_ckpt_file(
 
     return ckpt_file
 
-def read_config_dict_from_yaml(config_dir: str, config_file:str, config_class: type[BaseModel])->BaseModel
+
+def read_config_dict_from_yaml(
+    config_dir: str, config_file: str, config_class: type[ConfigType]
+) -> ConfigType:
+    with open(os.path.join(config_dir, config_file), "r") as f:
+        config_dict = yaml.safe_load(f)
+    return config_class(**config_dict)
