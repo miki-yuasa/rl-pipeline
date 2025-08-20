@@ -11,7 +11,7 @@ from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
 from rl_pipeline.utils.io import get_ckpt_file, get_file_with_largest_number
 
 from .config import MakeVecEnvConfig, SB3AlgorithmConfig
-from .utils.env_util import make_vec_env
+from .utils.env import make_vec_env
 
 
 class SB3EnvLoader(
