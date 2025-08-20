@@ -4,17 +4,26 @@ from typing import Any, Generic, Literal, Self, TypeVar
 import yaml
 from pydantic import BaseModel
 
+from rl_pipeline.core.loader import (
+    BaseEnvLoader,
+    BaseModelLoader,
+    EnvLoaderType,
+    ModelLoaderType,
+)
 from rl_pipeline.eval import PolicyEvalStats
 from rl_pipeline.utils.io import get_class
 
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
-class BasePipeline(Generic[ConfigType]):
+class BasePipeline(Generic[ConfigType, EnvLoaderType, ModelLoaderType]):
     """
     Base class for training pipelines.
     This class provides a structure for training configurations and methods.
     """
+
+    env_loader: EnvLoaderType
+    model_loader: ModelLoaderType
 
     def __init__(self, config: ConfigType, verbose: bool = True):
         self.config: ConfigType = config
