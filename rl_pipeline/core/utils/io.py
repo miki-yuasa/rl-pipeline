@@ -2,6 +2,8 @@ import importlib
 import os
 from typing import Literal
 
+from pydantic import BaseModel
+
 
 def format_large_number(timesteps: int) -> str:
     if timesteps >= 1_000_000:
@@ -10,6 +12,12 @@ def format_large_number(timesteps: int) -> str:
         return f"{timesteps / 1_000}K"
     else:
         return str(timesteps)
+
+
+def replace_extension(filepath: str, new_ext: str) -> str:
+    """Replace the file extension of a given file path."""
+    base, _ = os.path.splitext(filepath)
+    return f"{base}.{new_ext}"
 
 
 def get_class(cls_name: str | None) -> type | None:
@@ -119,3 +127,5 @@ def get_ckpt_file(
             )
 
     return ckpt_file
+
+def read_config_dict_from_yaml(config_dir: str, config_file:str, config_class: type[BaseModel])->BaseModel
