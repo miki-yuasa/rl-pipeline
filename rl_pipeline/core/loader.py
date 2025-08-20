@@ -20,7 +20,7 @@ class BaseEnvLoader:
 
 
 class BaseModelLoader:
-    def model(self):
+    def model(self, env=None):
         """Return the model."""
         raise NotImplementedError("Subclasses must implement this method.")
 
