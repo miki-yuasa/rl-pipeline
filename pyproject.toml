@@ -9,10 +9,15 @@ dependencies = ["numpy>=2.0.0", "pydantic>=2.0.0", "pyyaml>=6.0.0"]
 
 [project.optional-dependencies]
 gymnasium = ["gymnasium>=1.0.0"]
-sb3 = ["stable-baselines3>=2.0.0", "gymnasium>=1.0.0"]
+sb3 = ["stable-baselines3>=2.0.0", "gymnasium>=1.0.0", "imageio>=2.0.0"]
 
 [dependency-groups]
-dev = ["pytest>=8.0.0", "gymnasium>=1.0.0", "stable-baselines3>=2.0.0"]
+dev = [
+    "pytest>=8.0.0",
+    "gymnasium>=1.0.0",
+    "stable-baselines3>=2.0.0",
+    "imageio>=2.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
