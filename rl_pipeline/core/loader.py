@@ -2,9 +2,6 @@ from pydantic import BaseModel
 
 
 class BaseEnvLoader:
-    def __init__(self, config: BaseModel) -> None:
-        self.config = config
-
     def env(self):
         """Return the environment make configuration."""
         raise NotImplementedError("Subclasses must implement this method.")
@@ -23,9 +20,6 @@ class BaseEnvLoader:
 
 
 class BaseModelLoader:
-    def __init__(self, config: BaseModel) -> None:
-        self.config = config
-
     def model(self):
         """Return the model."""
         raise NotImplementedError("Subclasses must implement this method.")
