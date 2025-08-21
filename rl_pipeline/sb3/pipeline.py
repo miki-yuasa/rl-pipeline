@@ -11,7 +11,7 @@ from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .config import SB3CallbackConfigs, SB3LearnConfig, SB3PipelineConfig
+from .config import SB3CallbackConfig, SB3LearnConfig, SB3PipelineConfig
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
 
@@ -22,7 +22,7 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
 
         self.save_config: SaveConfig = config.save_config
         self.learn_config: SB3LearnConfig = config.learn_config
-        self.callback_configs: SB3CallbackConfigs = config.callback_configs
+        self.callback_configs: SB3CallbackConfig = config.callback_config
 
         self.env_loader = SB3EnvLoader(
             config.env_config, config.wrapper_config, config.vec_config
