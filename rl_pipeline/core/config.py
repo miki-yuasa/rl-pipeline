@@ -41,6 +41,7 @@ class SaveConfigReader(BaseModel):
     models_dir: str = "out/model/"
     model_name: str = "my_model"
     model_filename: str = "final_model.zip"
+    best_model_filename: str = "best_model.zip"
     monitor_dir: str = "monitor"
     tb_dir: str = "tb"
     eval_dir: str = "eval"
