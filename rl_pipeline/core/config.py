@@ -11,6 +11,7 @@ class SaveConfig(BaseModel):
     """Paths for saving models."""
 
     model_save_path: str
+    best_model_save_path: str
     monitor_save_dir: str
     tb_save_dir: str
     eval_save_dir: str
@@ -59,6 +60,9 @@ class SaveConfigReader(BaseModel):
         )
         model_filename: str = self._model_filename(experiment_id + model_name_suffix)
         model_save_path: str = os.path.join(model_save_dir, model_filename)
+        best_model_save_path: str = os.path.join(
+            model_save_dir, self.best_model_filename
+        )
 
         animation_save_dir: str = os.path.join(model_save_dir, self.animation_dir)
         animation_save_path: str = replace_extension(
@@ -74,6 +78,7 @@ class SaveConfigReader(BaseModel):
 
         save_config = SaveConfig(
             model_save_path=model_save_path,
+            best_model_save_path=best_model_save_path,
             monitor_save_dir=monitor_save_dir,
             tb_save_dir=tb_save_dir,
             eval_save_dir=eval_save_dir,

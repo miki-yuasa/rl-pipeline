@@ -71,7 +71,7 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
 
     def load_model(
         self,
-        ckpt_timestep: int | Literal["latest", "final"] = "final",
+        ckpt_timestep: int | Literal["latest", "final", "best"] = "final",
         env: Env | Wrapper | None = None,
         device: str | None = None,
     ) -> BaseAlgorithm:
@@ -82,6 +82,11 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
             case "final":
                 model = self.model_loader.load_model(
                     self.config.save_config.model_save_path, env, device
+                )
+
+            case "best":
+                model = self.model_loader.load_model(
+                    self.config.save_config.best_model_save_path, env, device
                 )
 
             case _:
@@ -101,8 +106,8 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
         n_eval_episodes: int = 100,
         deterministic: bool = False,
         save_to_file: bool = True,
-        eval_file_name: str = "final_model_eval.yaml",
-        checkpoint: int | Literal["latest", "final"] | BaseAlgorithm = "final",
+        eval_file_name: str = "model_eval.yaml",
+        checkpoint: int | Literal["latest", "final", "best"] | BaseAlgorithm = "final",
     ) -> PolicyEvalStats:
         """Evaluate the final model."""
 
