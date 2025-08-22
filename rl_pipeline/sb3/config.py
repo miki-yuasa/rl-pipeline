@@ -20,7 +20,6 @@ class MakeVecEnvConfig(BaseModel):
     seed: int | None = None
     start_index: int = Field(ge=0, default=0)
     monitor_dir: str | None = None
-    env_kwargs: dict[str, Any] | None = None
     vec_env_cls: type[SubprocVecEnv] | type[DummyVecEnv] | None = SubprocVecEnv
     vec_env_kwargs: dict[str, Any] | None = None
     monitor_kwargs: dict[str, Any] | None = None

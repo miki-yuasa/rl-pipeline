@@ -60,7 +60,7 @@ class SB3EnvLoader(
             seed=self.vec_config.seed,
             start_index=self.vec_config.start_index,
             monitor_dir=self.vec_config.monitor_dir,
-            env_kwargs=self.vec_config.env_kwargs,
+            env_kwargs=self.env_config.env_kwargs,
             wrapper_class=wrapper_class,
             wrapper_kwargs=wrapper_kwargs,
             vec_env_cls=self.vec_config.vec_env_cls,

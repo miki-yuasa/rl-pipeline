@@ -74,9 +74,7 @@ class MakeVecEnvConfigReader(BaseModel):
     vec_env_kwargs: dict[str, Any] | None = None
     monitor_kwargs: dict[str, Any] | None = None
 
-    def to_config(
-        self, save_config: SaveConfig, env_config: MakeEnvConfig
-    ) -> MakeVecEnvConfig:
+    def to_config(self, save_config: SaveConfig) -> MakeVecEnvConfig:
         vec_env_cls: type[SubprocVecEnv] | type[DummyVecEnv] | None = (
             get_class("stable_baselines3.common.vec_env." + self.vec_env_cls)
             if self.vec_env_cls
@@ -184,7 +182,9 @@ class SB3ModelConfigReader(BaseModel):
         return SB3ModelConfig(
             algo_config=self.algo_config.to_config(),
             learn_config=self.learn_config,
-            vec_config=self.vec_config.to_config() if self.vec_config else None,
+            vec_config=self.vec_config.to_config(save_config=save_config)
+            if self.vec_config
+            else None,
             callback_config=self.callback_config.to_config(save_config=save_config),
         )
 
