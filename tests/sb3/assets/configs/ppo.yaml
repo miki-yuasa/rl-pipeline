@@ -1,10 +1,11 @@
 algo_config:
   algorithm: PPO
   algo_kwargs:
+    policy: MlpPolicy
     n_steps: 100
     batch_size: 1000
     n_epochs: 10
-    learning_rate: 3e-4
+    learning_rate: 0.0003
     ent_coef: 0.0
     clip_range: 0.2
 
@@ -24,11 +25,11 @@ callback_config:
     deterministic: false
     render: false
   ckpt_callback_config:
-    save_freq: 10
+    save_freq: 50
     save_path: ckpts
     name_prefix: ckpt
   video_recorder_callback_config:
-    render_freq: 10
+    render_freq: 50
     save_dir: ckpts
     name_prefix: ckpt
     file_ext: gif

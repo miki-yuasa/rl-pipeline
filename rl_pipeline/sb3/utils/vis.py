@@ -19,7 +19,7 @@ def record_replay(
         obs, reward, terminated, truncated, info = demo_env.step(action)
         if verbose:
             print(
-                f" - Reward: {reward:.2f}, Terminated: {terminated}, Truncated: {truncated}, Success: {info['is_success']}"
+                f" - Reward: {reward:.2f}, Terminated: {terminated}, Truncated: {truncated}, Success: {info.get('is_success', 'N/A')}"
             )
         rewards.append(reward)  # type: ignore
         frame = demo_env.render()
