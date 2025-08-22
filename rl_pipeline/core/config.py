@@ -1,6 +1,7 @@
 import os
-from typing import Generic, TypeVar
+from typing import Generic, Self
 
+import yaml
 from pydantic import BaseModel, computed_field
 
 from rl_pipeline.core.typing import ConfigType
@@ -36,7 +37,15 @@ class ConfigReader(Generic[ConfigType]):
         raise NotImplementedError
 
 
-class SaveConfigReader(BaseModel):
+class YAMLReaderMixin:
+    @classmethod
+    def from_yaml(cls, filepath: str) -> Self:
+        with open(filepath, "r") as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
+
+
+class SaveConfigReader(BaseModel, YAMLReaderMixin):
     """Configuration for saving models."""
 
     models_dir: str = "out/model/"
