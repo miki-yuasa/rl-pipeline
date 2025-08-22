@@ -14,3 +14,22 @@ learn_config:
 
 vec_config:
   n_envs: 10
+  vec_env_cls: SubprocVecEnv
+
+callback_config:
+  eval_callback_config:
+    eval_freq: 10
+    n_eval_episodes: 100
+    log_path: eval
+    deterministic: false
+    render: false
+  ckpt_callback_config:
+    save_freq: 10
+    save_path: ckpts
+    name_prefix: ckpt
+  video_recorder_callback_config:
+    render_freq: 10
+    save_dir: ckpts
+    name_prefix: ckpt
+    file_ext: gif
+    deterministic: false
