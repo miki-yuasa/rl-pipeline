@@ -40,8 +40,9 @@ def test_sb3_pipeline_config():
     target_json: str = "tests/sb3/assets/configs/pipeline_target_config.json"
     config_file_path: str = "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
 
-    config_reader = SB3PipelineConfigReader.from_yaml(config_file_path)
-    pipeline_config = config_reader.to_config()
+    pipeline_config: SB3PipelineConfig = SB3PipelineConfigReader.from_yaml(
+        config_file_path
+    ).to_config()
 
     with open(target_json, "r") as f:
         target_config: dict[str, Any] = json.load(f)
