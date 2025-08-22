@@ -1,0 +1,10 @@
+device: 0
+experiment_id: 1.a
+retrain_model: false
+save_config:
+  models_dir: tests/sb3/out/models
+  model_name: cartpole_model
+config_dir: tests/sb3/assets/configs
+env_config_file: cartpole_env_config.yaml
+wrapper_config_file: null
+model_config_file: ppo.yaml

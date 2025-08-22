@@ -1,0 +1,16 @@
+algo_config:
+  algorithm: PPO
+  algo_kwargs:
+    n_steps: 100
+    batch_size: 1000
+    n_epochs: 10
+    learning_rate: 3e-4
+    ent_coef: 0.0
+    clip_range: 0.2
+
+learn_config:
+  total_timesteps: 1_000
+  tb_log_name: "cartpole_ppo"
+
+vec_config:
+  n_envs: 10
