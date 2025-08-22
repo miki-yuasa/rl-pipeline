@@ -3,13 +3,15 @@ from typing import Any, Generic, Literal, Self
 
 import yaml
 
-from rl_pipeline.core.eval import PolicyEvalStats
-from rl_pipeline.core.loader import EnvLoaderType, ModelLoaderType
-from rl_pipeline.core.typing import ConfigType
-from rl_pipeline.core.utils.io import get_class
+from .eval import PolicyEvalStats
+from .experiment import ExperimentManagerType
+from .loader import EnvLoaderType, ModelLoaderType
+from .typing import ConfigType
 
 
-class BasePipeline(Generic[ConfigType, EnvLoaderType, ModelLoaderType]):
+class BasePipeline(
+    Generic[ConfigType, EnvLoaderType, ModelLoaderType, ExperimentManagerType]
+):
     """
     Base class for training pipelines.
     This class provides a structure for training configurations and methods.
@@ -17,6 +19,7 @@ class BasePipeline(Generic[ConfigType, EnvLoaderType, ModelLoaderType]):
 
     env_loader: EnvLoaderType
     model_loader: ModelLoaderType
+    experiment_manager: ExperimentManagerType
 
     def __init__(self, config: ConfigType, verbose: bool = True):
         self.config: ConfigType = config
