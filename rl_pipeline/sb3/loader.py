@@ -7,8 +7,8 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import VecEnv
 
 from rl_pipeline.core.loader import BaseEnvLoader, BaseModelLoader
+from rl_pipeline.core.utils.io import get_ckpt_file, get_file_with_largest_number
 from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
-from rl_pipeline.utils.io import get_ckpt_file, get_file_with_largest_number
 
 from .config import MakeVecEnvConfig, SB3AlgorithmConfig
 from .utils.env import make_vec_env

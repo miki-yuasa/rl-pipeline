@@ -37,7 +37,7 @@ class SB3AlgorithmConfig(BaseModel):
 class SB3LearnConfig(BaseModel):
     total_timesteps: int = Field(ge=1, default=1_000_000)
     # callback: MaybeCallback = None
-    log_interval: int = Field(ge=0, default=100)
+    log_interval: int = Field(ge=0, default=1)
     tb_log_name: str = "run"
     reset_num_timesteps: bool = True
     progress_bar: bool = False

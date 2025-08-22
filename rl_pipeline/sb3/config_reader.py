@@ -11,7 +11,11 @@ from rl_pipeline.core.utils.io import (
     get_class,
     read_config_dict_from_yaml,
 )
-from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
+from rl_pipeline.gymnasium.config import (
+    MakeEnvConfig,
+    WrapperConfig,
+    WrapperConfigReader,
+)
 
 from .callback import (
     CheckpointCallbackConfig,
@@ -62,17 +66,17 @@ class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig]):
         )
 
 
-class MakeVecEnvConfigReader(BaseModel, ConfigReader[MakeVecEnvConfig]):
+class MakeVecEnvConfigReader(BaseModel):
     n_envs: int = Field(ge=1, default=1)
     seed: int | None = None
     start_index: int = Field(ge=0, default=0)
-    monitor_dir: str | None = None
-    env_kwargs: dict[str, Any] | None = None
     vec_env_cls: str | None = "SubprocVecEnv"
     vec_env_kwargs: dict[str, Any] | None = None
     monitor_kwargs: dict[str, Any] | None = None
 
-    def to_config(self) -> MakeVecEnvConfig:
+    def to_config(
+        self, save_config: SaveConfig, env_config: MakeEnvConfig
+    ) -> MakeVecEnvConfig:
         vec_env_cls: type[SubprocVecEnv] | type[DummyVecEnv] | None = (
             get_class("stable_baselines3.common.vec_env." + self.vec_env_cls)
             if self.vec_env_cls
@@ -82,8 +86,7 @@ class MakeVecEnvConfigReader(BaseModel, ConfigReader[MakeVecEnvConfig]):
             n_envs=self.n_envs,
             seed=self.seed,
             start_index=self.start_index,
-            monitor_dir=self.monitor_dir,
-            env_kwargs=self.env_kwargs,
+            monitor_dir=save_config.monitor_save_dir,
             vec_env_cls=vec_env_cls,
             vec_env_kwargs=self.vec_env_kwargs,
             monitor_kwargs=self.monitor_kwargs,
@@ -191,7 +194,7 @@ class SB3ConfigReader(BaseModel, ConfigReader[SB3PipelineConfig]):
 
     device: str | int = "cuda:0"
     experiment_id: str = ""
-    retrain_model: bool = True
+    retrain_model: bool = False
     save_config: SaveConfigReader
     config_dir: str = "configs"
     env_config_file: str = "env_config.yaml"
@@ -242,9 +245,11 @@ class SB3ConfigReader(BaseModel, ConfigReader[SB3PipelineConfig]):
 
     def _to_wrapper_config(self) -> WrapperConfig | None:
         if self.wrapper_config_file:
-            return read_config_dict_from_yaml(
-                self.config_dir, self.wrapper_config_file, WrapperConfig
+            wrapper_config_reader = read_config_dict_from_yaml(
+                self.config_dir, self.wrapper_config_file, WrapperConfigReader
             )
+            wrapper_config = wrapper_config_reader.to_config()
+            return wrapper_config
         return None
 
     def _to_model_config_reader(self) -> SB3ModelConfigReader:
