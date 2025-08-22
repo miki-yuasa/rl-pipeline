@@ -4,16 +4,40 @@ from typing import Literal
 import numpy as np
 from gymnasium import Env, Wrapper
 from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env import VecEnv
 
 from rl_pipeline.core.config import SaveConfig
 from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
+from .callback import SuccessEvalCallback, VideoRecorderCallback
 from .config import SB3CallbackConfig, SB3LearnConfig, SB3PipelineConfig
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
+
+
+def init_callback(
+    eval_env: VecEnv, video_env: Env | Wrapper, callback_config: SB3CallbackConfig
+) -> list[BaseCallback]:
+    ckpt_callback = CheckpointCallback(
+        **callback_config.ckpt_callback_config.model_dump()
+    )
+    eval_callback = SuccessEvalCallback(
+        eval_env=eval_env, **callback_config.eval_callback_config.model_dump()
+    )
+    callbacks = [ckpt_callback, eval_callback]
+
+    if callback_config.video_recorder_callback_config:
+        video_callback = VideoRecorderCallback(
+            eval_env=video_env,
+            **callback_config.video_recorder_callback_config.model_dump(),
+        )
+        callbacks.append(video_callback)
+
+    return callbacks
 
 
 class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader]):
@@ -35,9 +59,13 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
         """
         Train the model using the provided training configuration.
         """
-        train_env = self.env_loader.vec_env()
-        model = self.model_loader.model(train_env, device=self.config.device)
-        model.learn(**self.learn_config.model_dump())
+        train_env: VecEnv = self.env_loader.vec_env()
+        model: BaseAlgorithm = self.model_loader.model(
+            train_env, device=self.config.device
+        )
+        callback: list[BaseCallback] = self._init_callback()
+
+        model.learn(**self.learn_config.model_dump(), callback=callback)
         train_env.close()
         os.makedirs(self.save_config.model_save_dir, exist_ok=True)
         # Save the model
@@ -48,6 +76,13 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
         model.save(save_path)
 
         return model
+
+    def _init_callback(self) -> list[BaseCallback]:
+        return init_callback(
+            eval_env=self.env_loader.vec_env(),
+            video_env=self.env_loader.env(),
+            callback_config=self.callback_configs,
+        )
 
     def train_on_unsaved_model(self) -> BaseAlgorithm:
         """

@@ -1,8 +1,7 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.type_aliases import MaybeCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from rl_pipeline.core.config import SaveConfig
@@ -13,6 +12,10 @@ from .callback import (
     EvalCallbackConfig,
     VideoRecorderCallbackConfig,
 )
+
+
+def class_to_string(cls: type) -> str:
+    return f"{cls.__module__}.{cls.__name__}"
 
 
 class MakeVecEnvConfig(BaseModel):
@@ -27,10 +30,21 @@ class MakeVecEnvConfig(BaseModel):
     # allow arbitrary kwargs
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    @field_serializer("vec_env_cls", when_used="json")
+    def serialize_vec_env_cls(
+        self, vec_env_cls: type[SubprocVecEnv | DummyVecEnv]
+    ) -> str:
+        return class_to_string(vec_env_cls)
+
 
 class SB3AlgorithmConfig(BaseModel):
     algorithm: type[BaseAlgorithm]
     algo_kwargs: dict[str, Any]
+
+    # For json serialization, `algorithm` should be in a string (e.b. "stable_baselines.PPO")
+    @field_serializer("algorithm", when_used="json")
+    def serialize_algorithm(self, algorithm: type[BaseAlgorithm]) -> str:
+        return class_to_string(algorithm)
 
 
 class SB3LearnConfig(BaseModel):
