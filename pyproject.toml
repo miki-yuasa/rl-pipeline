@@ -19,7 +19,7 @@ sb3 = [
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
-    "gymnasium>=1.0.0",
+    "gymnasium[classic-control]>=1.0.0",
     "stable-baselines3>=2.0.0",
     "imageio>=2.0.0",
     "tensorboard>=2.0.0",
