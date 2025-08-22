@@ -3,6 +3,7 @@ import os
 from typing import Literal
 
 import yaml
+from pydantic import ValidationError
 
 from ..typing import ConfigType
 
@@ -136,4 +137,10 @@ def read_config_dict_from_yaml(
 ) -> ConfigType:
     with open(os.path.join(config_dir, config_file), "r") as f:
         config_dict = yaml.safe_load(f)
-    return config_class(**config_dict)
+
+    try:
+        return config_class(**config_dict)
+    except ValidationError as e:
+        raise ValueError(
+            f"Invalid config for {config_file} for class {config_class.__name__}:\n{e}",
+        )
