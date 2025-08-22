@@ -5,7 +5,12 @@ from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from rl_pipeline.core.config import ConfigReader, SaveConfig, SaveConfigReader
+from rl_pipeline.core.config import (
+    ConfigReader,
+    SaveConfig,
+    SaveConfigReader,
+    YAMLReaderMixin,
+)
 from rl_pipeline.core.utils.io import (
     format_large_number,
     get_class,
@@ -32,7 +37,9 @@ from .config import (
 )
 
 
-class SB3AlgorithmConfigReader(BaseModel, ConfigReader[SB3AlgorithmConfig]):
+class SB3AlgorithmConfigReader(
+    BaseModel, ConfigReader[SB3AlgorithmConfig], YAMLReaderMixin
+):
     algorithm: str = "PPO"
     algo_kwargs: dict[str, Any] = {}
 
@@ -49,7 +56,7 @@ class SB3AlgorithmConfigReader(BaseModel, ConfigReader[SB3AlgorithmConfig]):
         )
 
 
-class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig]):
+class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig], YAMLReaderMixin):
     total_timesteps: int = Field(ge=1, default=1_000_000)
     log_interval: int = Field(ge=0, default=100)
     tb_log_name: str = "run"
@@ -66,7 +73,7 @@ class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig]):
         )
 
 
-class MakeVecEnvConfigReader(BaseModel):
+class MakeVecEnvConfigReader(BaseModel, YAMLReaderMixin):
     n_envs: int = Field(ge=1, default=1)
     seed: int | None = None
     start_index: int = Field(ge=0, default=0)
@@ -91,7 +98,7 @@ class MakeVecEnvConfigReader(BaseModel):
         )
 
 
-class EvalCallbackConfigReader(BaseModel):
+class EvalCallbackConfigReader(BaseModel, YAMLReaderMixin):
     eval_freq: int = Field(ge=0)
     n_eval_episodes: int = Field(ge=1)
     log_path: str = "eval"
@@ -109,7 +116,7 @@ class EvalCallbackConfigReader(BaseModel):
         )
 
 
-class CheckpointCallbackConfigReader(BaseModel):
+class CheckpointCallbackConfigReader(BaseModel, YAMLReaderMixin):
     save_freq: int = Field(ge=1, default=100)
     save_path: str = "ckpts"
     name_prefix: str = "ckpt"
@@ -126,7 +133,7 @@ class CheckpointCallbackConfigReader(BaseModel):
         )
 
 
-class VideoRecorderCallbackConfigReader(BaseModel):
+class VideoRecorderCallbackConfigReader(BaseModel, YAMLReaderMixin):
     render_freq: int = Field(ge=1, default=100)
     save_dir: str = "ckpts"
     name_prefix: str = "rl_model"
@@ -143,7 +150,7 @@ class VideoRecorderCallbackConfigReader(BaseModel):
         )
 
 
-class SB3CallbackConfigReader(BaseModel):
+class SB3CallbackConfigReader(BaseModel, YAMLReaderMixin):
     eval_callback_config: EvalCallbackConfigReader
     ckpt_callback_config: CheckpointCallbackConfigReader = (
         CheckpointCallbackConfigReader()
@@ -170,7 +177,7 @@ class SB3CallbackConfigReader(BaseModel):
         )
 
 
-class SB3ModelConfigReader(BaseModel):
+class SB3ModelConfigReader(BaseModel, YAMLReaderMixin):
     """Configuration reader for SB3 model."""
 
     algo_config: SB3AlgorithmConfigReader = SB3AlgorithmConfigReader()
@@ -189,7 +196,9 @@ class SB3ModelConfigReader(BaseModel):
         )
 
 
-class SB3ConfigReader(BaseModel, ConfigReader[SB3PipelineConfig]):
+class SB3PipelineConfigReader(
+    BaseModel, ConfigReader[SB3PipelineConfig], YAMLReaderMixin
+):
     """Configuration reader for SB3 pipeline."""
 
     device: str | int = "cuda:0"
