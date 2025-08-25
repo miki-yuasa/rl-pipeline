@@ -224,6 +224,9 @@ class WandbExperimentManager(
     Experiment manager for Weights & Biases (wandb).
     """
 
+    def __init__(self, config: PipelineConfigType) -> None:
+        super().__init__(config)
+
     def start_run(
         self,
         manager_config: dict[str, Any] | WandbInitConfig,

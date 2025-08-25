@@ -1,19 +1,15 @@
-from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, field_serializer
 from stable_baselines3.common.callbacks import BaseCallback
 
-from rl_pipeline.core.config import ConfigReader, YAMLReaderMixin
 from rl_pipeline.core.experiment import RunType
-from rl_pipeline.core.utils.io import get_class
 
 SB3ExperimentManagerType = TypeVar(
     "SB3ExperimentManagerType", bound="SB3ExperimentManager"
 )
 
 
-@runtime_checkable
-class SB3ExperimentManager(Protocol, Generic[RunType]):
+class SB3ExperimentManager(Generic[RunType]):
     """
     Protocol for experiment managers in the SB3 framework.
 
@@ -42,34 +38,3 @@ class SB3ExperimentManager(Protocol, Generic[RunType]):
         ...
 
     def end_run(self) -> None: ...
-
-
-class SB3ExperimentManagerConfig(BaseModel):
-    manager_class: type[SB3ExperimentManager]
-    manager_config: dict[str, Any]
-    callback_config: dict[str, Any]
-
-    @field_serializer("manager_class", when_used="json")
-    def serialize_manager_class(self, manager_class: type[SB3ExperimentManager]) -> str:
-        return manager_class.__module__ + "." + manager_class.__name__
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class SB3ExperimentManagerConfigReader(
-    BaseModel, ConfigReader[SB3ExperimentManagerConfig], YAMLReaderMixin
-):
-    manager_class: str
-    manager_config: dict[str, Any]
-    callback_config: dict[str, Any]
-
-    def to_config(self) -> SB3ExperimentManagerConfig:
-        manager_class = get_class(self.manager_class)
-        assert manager_class is not None, (
-            f"Could not find experiment manager class for {self.manager_class}"
-        )
-        return SB3ExperimentManagerConfig(
-            manager_class=manager_class,
-            manager_config=self.manager_config,
-            callback_config=self.callback_config,
-        )

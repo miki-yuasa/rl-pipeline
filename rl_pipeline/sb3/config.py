@@ -1,4 +1,4 @@
-from typing import Any, Generic
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -12,7 +12,7 @@ from .callback import (
     EvalCallbackConfig,
     VideoRecorderCallbackConfig,
 )
-from .experiment import SB3ExperimentManagerConfig
+from .experiment import SB3ExperimentManager
 
 
 def class_to_string(cls: type) -> str:
@@ -64,6 +64,18 @@ class SB3CallbackConfig(BaseModel):
     eval_callback_config: EvalCallbackConfig
     ckpt_callback_config: CheckpointCallbackConfig
     video_recorder_callback_config: VideoRecorderCallbackConfig | None = None
+
+
+class SB3ExperimentManagerConfig(BaseModel):
+    manager_class: type[SB3ExperimentManager]
+    manager_config: dict[str, Any]
+    callback_config: dict[str, Any]
+
+    @field_serializer("manager_class", when_used="json")
+    def serialize_manager_class(self, manager_class: type[SB3ExperimentManager]) -> str:
+        return manager_class.__module__ + "." + manager_class.__name__
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SB3PipelineConfig(BaseModel):

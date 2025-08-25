@@ -31,11 +31,11 @@ from .config import (
     MakeVecEnvConfig,
     SB3AlgorithmConfig,
     SB3CallbackConfig,
+    SB3ExperimentManagerConfig,
     SB3LearnConfig,
     SB3ModelConfig,
     SB3PipelineConfig,
 )
-from .experiment import SB3ExperimentManagerConfig, SB3ExperimentManagerConfigReader
 
 
 class SB3AlgorithmConfigReader(
@@ -175,6 +175,25 @@ class SB3CallbackConfigReader(BaseModel, YAMLReaderMixin):
             eval_callback_config=eval_callback_config,
             ckpt_callback_config=ckpt_callback_config,
             video_recorder_callback_config=video_recorder_callback_config,
+        )
+
+
+class SB3ExperimentManagerConfigReader(
+    BaseModel, ConfigReader[SB3ExperimentManagerConfig], YAMLReaderMixin
+):
+    manager_class: str
+    manager_config: dict[str, Any]
+    callback_config: dict[str, Any]
+
+    def to_config(self) -> SB3ExperimentManagerConfig:
+        manager_class = get_class(self.manager_class)
+        assert manager_class is not None, (
+            f"Could not find experiment manager class for {self.manager_class}"
+        )
+        return SB3ExperimentManagerConfig(
+            manager_class=manager_class,
+            manager_config=self.manager_config,
+            callback_config=self.callback_config,
         )
 
 

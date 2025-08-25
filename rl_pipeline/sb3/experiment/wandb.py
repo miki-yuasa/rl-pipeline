@@ -1,16 +1,16 @@
-from typing import Any, Literal
+from typing import Any, Generic, Literal
 
 from pydantic import BaseModel, Field
 from wandb.integration.sb3 import WandbCallback
 from wandb.sdk.wandb_run import Run
 
+from rl_pipeline.core import PipelineConfigType
 from rl_pipeline.experiment.wandb import WandbExperimentManager, WandbInitConfig
 
-from ..config import SB3PipelineConfig
 from .base import SB3ExperimentManager
 
 
-class WandbCallbackConfig(BaseModel):
+class SB3WandbCallbackConfig(BaseModel):
     """
     Configuration for the WandbCallback.
 
@@ -29,23 +29,24 @@ class WandbCallbackConfig(BaseModel):
     log: Literal["gradients", "parameters", "all"] | None = "all"
 
 
-class SB3WandbExperimentManager(
-    WandbExperimentManager[SB3PipelineConfig], SB3ExperimentManager[Run]
-):
-    def __init__(self, config: SB3PipelineConfig) -> None:
-        super().__init__(config)
+class SB3WandbExperimentManager(SB3ExperimentManager[Run], Generic[PipelineConfigType]):
+    def __init__(self, config: PipelineConfigType) -> None:
+        # Initialize WandbExperimentManager
+        self.wandb_manager: WandbExperimentManager[PipelineConfigType] = (
+            WandbExperimentManager(config)
+        )
 
     def start_run(
         self,
         manager_config: dict[str, Any] | WandbInitConfig,
         logged_param_config: BaseModel,
     ) -> Run:
-        return super().start_run(manager_config, logged_param_config)
+        return self.wandb_manager.start_run(manager_config, logged_param_config)
 
     def end_run(self) -> None:
-        return super().end_run()
+        return self.wandb_manager.end_run()
 
-    def logger_callback(self, callback_config: dict[str, Any] | WandbCallbackConfig):
+    def logger_callback(self, callback_config: dict[str, Any] | SB3WandbCallbackConfig):
         callback_config_dict = (
             callback_config
             if isinstance(callback_config, dict)
