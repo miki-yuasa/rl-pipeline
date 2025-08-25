@@ -1,10 +1,10 @@
-from typing import Any
+from typing import Any, Generic
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from rl_pipeline.core.config import SaveConfig
+from rl_pipeline.core import SaveConfig
 from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
 
 from .callback import (
@@ -12,6 +12,7 @@ from .callback import (
     EvalCallbackConfig,
     VideoRecorderCallbackConfig,
 )
+from .experiment import SB3ExperimentManagerConfig
 
 
 def class_to_string(cls: type) -> str:
@@ -76,6 +77,7 @@ class SB3PipelineConfig(BaseModel):
     algo_config: SB3AlgorithmConfig
     learn_config: SB3LearnConfig
     callback_config: SB3CallbackConfig
+    experiment_manager_config: SB3ExperimentManagerConfig | None = None
 
 
 class SB3ModelConfig(BaseModel):
