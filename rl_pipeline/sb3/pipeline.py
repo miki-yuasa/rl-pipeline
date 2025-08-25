@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from gymnasium import Env, Wrapper
@@ -60,9 +60,7 @@ class SB3Pipeline(
 
         if self.config.experiment_manager_config:
             manager_class = self.config.experiment_manager_config.manager_class
-            self.experiment_manager = manager_class(
-                **self.config.experiment_manager_config.manager_config
-            )
+            self.experiment_manager = manager_class(config=config)
 
     def train(self) -> BaseAlgorithm:
         """
@@ -101,9 +99,19 @@ class SB3Pipeline(
 
     def _manager_start_run(self):
         if self.experiment_manager and self.config.experiment_manager_config:
+            manager_config: dict[str, Any] = (
+                self.config.experiment_manager_config.manager_config
+            )
+            manager_config.update(
+                {
+                    "id": self.unique_id(),
+                    "name": manager_config["name"] + f"_{self.exp_time}"
+                    if manager_config.get("name")
+                    else f"run_{self.exp_time}",
+                }
+            )
             self.experiment_manager.start_run(
-                manager_config=self.config.experiment_manager_config.manager_config,
-                logged_param_config=self.config,
+                manager_config=manager_config, logged_param_config=self.config
             )
         else:
             pass
@@ -111,7 +119,7 @@ class SB3Pipeline(
     def _manager_add_callback(self, callbacks: list[BaseCallback]):
         if self.experiment_manager and self.config.experiment_manager_config:
             callback = self.experiment_manager.logger_callback(
-                **self.config.experiment_manager_config.callback_config
+                self.config.experiment_manager_config.callback_config
             )
             callbacks.append(callback)
         else:

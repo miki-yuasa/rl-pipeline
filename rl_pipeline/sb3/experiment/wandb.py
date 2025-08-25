@@ -29,7 +29,7 @@ class SB3WandbCallbackConfig(BaseModel):
     log: Literal["gradients", "parameters", "all"] | None = "all"
 
 
-class SB3WandbExperimentManager(SB3ExperimentManager[Run], Generic[PipelineConfigType]):
+class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
     def __init__(self, config: PipelineConfigType) -> None:
         # Initialize WandbExperimentManager
         self.wandb_manager: WandbExperimentManager[PipelineConfigType] = (

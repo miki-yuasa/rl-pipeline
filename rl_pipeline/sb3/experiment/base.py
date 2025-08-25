@@ -3,13 +3,14 @@ from typing import Generic, TypeVar
 from stable_baselines3.common.callbacks import BaseCallback
 
 from rl_pipeline.core.experiment import RunType
+from rl_pipeline.core.typing import PipelineConfigType
 
 SB3ExperimentManagerType = TypeVar(
     "SB3ExperimentManagerType", bound="SB3ExperimentManager"
 )
 
 
-class SB3ExperimentManager(Generic[RunType]):
+class SB3ExperimentManager(Generic[RunType, PipelineConfigType]):
     """
     Protocol for experiment managers in the SB3 framework.
 
@@ -18,6 +19,10 @@ class SB3ExperimentManager(Generic[RunType]):
     feature is enabled through a callback (e.g., WandbCallback) derived from
     the BaseCallback class.
     """
+
+    def __init__(self, config: PipelineConfigType) -> None:
+        # Initialize WandbExperimentManager
+        ...
 
     def start_run(self, manager_config, logged_param_config) -> RunType: ...
 

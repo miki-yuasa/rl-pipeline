@@ -1,5 +1,7 @@
 import os
-from typing import Any, Generic, Literal, Self
+import uuid
+from datetime import datetime
+from typing import Any, Generic, Literal
 
 import yaml
 
@@ -94,3 +96,11 @@ class BasePipeline(
             yaml.dump(eval_result.model_dump(), f, sort_keys=False)
         if self.verbose:
             print(f"Saved evaluation results to {eval_file_path}")
+
+    def unique_id(self) -> str:
+        """Generate a unique identifier for the training run."""
+        return str(uuid.uuid4())[:4]
+
+    def exp_time(self) -> str:
+        """Get the current time formatted for the experiment."""
+        return datetime.now().strftime("%m-%d_%H-%M-%S.%f")
