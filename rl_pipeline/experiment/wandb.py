@@ -1,13 +1,12 @@
-from typing import Any, Literal, Sequence
+from typing import Any, Generic, Literal, Sequence
 
 import wandb
-from pydantic import BaseModel, Field
-from wandb.integration.sb3 import WandbCallback
+from pydantic import BaseModel
 from wandb.sdk.lib.paths import StrPath
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.wandb_settings import Settings
 
-from rl_pipeline.core import BaseExperimentManager
+from rl_pipeline.core import BaseExperimentManager, PipelineConfigType
 
 
 class WandbInitConfig(BaseModel):
@@ -218,13 +217,17 @@ class WandbInitConfig(BaseModel):
     settings: Settings | dict[str, Any] | None = None
 
 
-class WandbExperimentManager(BaseExperimentManager[Run]):
+class WandbExperimentManager(
+    BaseExperimentManager[PipelineConfigType, Run], Generic[PipelineConfigType]
+):
     """
     Experiment manager for Weights & Biases (wandb).
     """
 
     def start_run(
-        self, manager_config: BaseModel, logged_param_config: BaseModel
+        self,
+        manager_config: dict[str, Any] | WandbInitConfig,
+        logged_param_config: BaseModel,
     ) -> Run:
         """
         Start a new wandb run.
@@ -242,9 +245,12 @@ class WandbExperimentManager(BaseExperimentManager[Run]):
             The started wandb run for the current experiment.
 
         """
-        run = wandb.init(
-            **manager_config.model_dump(), config=logged_param_config.dict()
+        manager_config_dict = (
+            manager_config
+            if isinstance(manager_config, dict)
+            else manager_config.model_dump()
         )
+        run = wandb.init(**manager_config_dict, config=logged_param_config.model_dump())
         self.run = run
         return run
 

@@ -15,6 +15,7 @@ from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
 from .callback import SuccessEvalCallback, VideoRecorderCallback
 from .config import SB3CallbackConfig, SB3LearnConfig, SB3PipelineConfig
+from .experiment.base import SB3ExperimentManager
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
 
@@ -40,7 +41,9 @@ def init_callback(
     return callbacks
 
 
-class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader]):
+class SB3Pipeline(
+    BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader, SB3ExperimentManager],
+):
     def __init__(self, config: SB3PipelineConfig, verbose: bool = True):
         super().__init__(config, verbose=verbose)
 
@@ -55,15 +58,25 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
             config.algo_config, config.save_config.tb_save_dir
         )
 
+        if self.config.experiment_manager_config:
+            manager_class = self.config.experiment_manager_config.manager_class
+            self.experiment_manager = manager_class(
+                **self.config.experiment_manager_config.manager_config
+            )
+
     def train(self) -> BaseAlgorithm:
         """
         Train the model using the provided training configuration.
         """
+
+        self._manager_start_run()
+
         train_env: VecEnv = self.env_loader.vec_env()
         model: BaseAlgorithm = self.model_loader.model(
             train_env, device=self.config.device
         )
         callback: list[BaseCallback] = self._init_callback()
+        callback = self._manager_add_callback(callback)
 
         model.learn(**self.learn_config.model_dump(), callback=callback)
         train_env.close()
@@ -75,6 +88,8 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
         )
         model.save(save_path)
 
+        self._manager_end_run()
+
         return model
 
     def _init_callback(self) -> list[BaseCallback]:
@@ -83,6 +98,32 @@ class SB3Pipeline(BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader])
             video_env=self.env_loader.env(),
             callback_config=self.callback_configs,
         )
+
+    def _manager_start_run(self):
+        if self.experiment_manager and self.config.experiment_manager_config:
+            self.experiment_manager.start_run(
+                manager_config=self.config.experiment_manager_config.manager_config,
+                logged_param_config=self.config,
+            )
+        else:
+            pass
+
+    def _manager_add_callback(self, callbacks: list[BaseCallback]):
+        if self.experiment_manager and self.config.experiment_manager_config:
+            callback = self.experiment_manager.logger_callback(
+                **self.config.experiment_manager_config.callback_config
+            )
+            callbacks.append(callback)
+        else:
+            pass
+
+        return callbacks
+
+    def _manager_end_run(self):
+        if self.experiment_manager:
+            self.experiment_manager.end_run()
+        else:
+            pass
 
     def train_on_unsaved_model(self) -> BaseAlgorithm:
         """
