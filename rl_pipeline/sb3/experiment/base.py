@@ -1,6 +1,6 @@
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_serializer
 from stable_baselines3.common.callbacks import BaseCallback
 
 from rl_pipeline.core.config import ConfigReader, YAMLReaderMixin
@@ -12,6 +12,7 @@ SB3ExperimentManagerType = TypeVar(
 )
 
 
+@runtime_checkable
 class SB3ExperimentManager(Protocol, Generic[RunType]):
     """
     Protocol for experiment managers in the SB3 framework.
@@ -47,6 +48,12 @@ class SB3ExperimentManagerConfig(BaseModel):
     manager_class: type[SB3ExperimentManager]
     manager_config: dict[str, Any]
     callback_config: dict[str, Any]
+
+    @field_serializer("manager_class", when_used="json")
+    def serialize_manager_class(self, manager_class: type[SB3ExperimentManager]) -> str:
+        return manager_class.__module__ + "." + manager_class.__name__
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SB3ExperimentManagerConfigReader(

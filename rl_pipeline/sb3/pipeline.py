@@ -15,7 +15,7 @@ from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
 from .callback import SuccessEvalCallback, VideoRecorderCallback
 from .config import SB3CallbackConfig, SB3LearnConfig, SB3PipelineConfig
-from .experiment.base import SB3ExperimentManager
+from .experiment import SB3ExperimentManager
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
 

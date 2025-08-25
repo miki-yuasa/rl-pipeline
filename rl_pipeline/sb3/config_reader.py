@@ -35,6 +35,7 @@ from .config import (
     SB3ModelConfig,
     SB3PipelineConfig,
 )
+from .experiment import SB3ExperimentManagerConfig, SB3ExperimentManagerConfigReader
 
 
 class SB3AlgorithmConfigReader(
@@ -209,6 +210,7 @@ class SB3PipelineConfigReader(
     env_config_file: str = "env_config.yaml"
     wrapper_config_file: str | None = None
     model_config_file: str = "model_config.yaml"
+    experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
 
     def to_config(self) -> SB3PipelineConfig:
         device: str = (
@@ -231,6 +233,10 @@ class SB3PipelineConfigReader(
         learn_config = model_config.learn_config
         callback_config = model_config.callback_config
 
+        experiment_manager_config: SB3ExperimentManagerConfig | None = (
+            self._to_manager_config()
+        )
+
         pipeline_config = SB3PipelineConfig(
             device=device,
             experiment_id=self.experiment_id,
@@ -242,6 +248,7 @@ class SB3PipelineConfigReader(
             algo_config=algo_config,
             learn_config=learn_config,
             callback_config=callback_config,
+            experiment_manager_config=experiment_manager_config,
         )
 
         return pipeline_config
@@ -275,3 +282,8 @@ class SB3PipelineConfigReader(
             model_name_suffix="_"
             + format_large_number(model_config_reader.learn_config.total_timesteps),
         )
+
+    def _to_manager_config(self) -> SB3ExperimentManagerConfig | None:
+        if self.experiment_manager_config:
+            return self.experiment_manager_config.to_config()
+        return None
