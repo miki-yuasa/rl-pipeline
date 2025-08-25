@@ -30,12 +30,14 @@ def test_sb3_pipeline_config_reader():
         "wrapper_config_file": None,
         "experiment_manager_config": {
             "callback_config": {"gradient_save_freq": 50},
-            "manager_class": "rl_pipeline.sb3.SB3ExperimentManager",
+            "manager_class": "rl_pipeline.sb3.SB3WandbExperimentManager",
             "manager_config": {
+                "name": "cartpole_ppo",
                 "monitor_gym": False,
                 "project": "rl_pipeline_test",
                 "save_code": False,
                 "sync_tensorboard": True,
+                "entity": "miki-yuasa-university-of-illinois-urbana-champaign",
             },
         },
     }

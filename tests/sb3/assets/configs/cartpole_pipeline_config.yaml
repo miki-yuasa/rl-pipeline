@@ -9,11 +9,13 @@ env_config_file: cartpole_env_config.yaml
 wrapper_config_file: null
 model_config_file: ppo.yaml
 experiment_manager_config:
-  manager_class: rl_pipeline.sb3.SB3ExperimentManager
+  manager_class: rl_pipeline.sb3.SB3WandbExperimentManager
   manager_config:
     project: rl_pipeline_test
+    name: cartpole_ppo
     sync_tensorboard: true
     monitor_gym: false
     save_code: false
+    entity: miki-yuasa-university-of-illinois-urbana-champaign
   callback_config:
     gradient_save_freq: 50

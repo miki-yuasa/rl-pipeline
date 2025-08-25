@@ -74,12 +74,14 @@
     }
   },
   "experiment_manager_config": {
-    "manager_class": "rl_pipeline.sb3.experiment.base.SB3ExperimentManager",
+    "manager_class": "rl_pipeline.sb3.experiment.wandb.SB3WandbExperimentManager",
     "manager_config": {
+      "name": "cartpole_ppo",
       "project": "rl_pipeline_test",
       "sync_tensorboard": true,
       "monitor_gym": false,
-      "save_code": false
+      "save_code": false,
+      "entity": "miki-yuasa-university-of-illinois-urbana-champaign"
     },
     "callback_config": { "gradient_save_freq": 50 }
   }
