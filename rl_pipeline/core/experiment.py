@@ -3,19 +3,21 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel
 
 from .config import ConfigReader, YAMLReaderMixin
+from .typing import PipelineConfigType
 from .utils.io import get_class
 
 ExperimentManagerType = TypeVar("ExperimentManagerType")
 
-RunType = TypeVar("RunType")
+RunType = TypeVar("RunType", covariant=True)
 
 
-class BaseExperimentManager(Generic[RunType]):
+class BaseExperimentManager(Generic[PipelineConfigType, RunType]):
     """
     Base class for experiment managers such as Weights & Biases (wandb) and MLflow.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config: PipelineConfigType) -> None:
+        self.config: PipelineConfigType = config
         self.run: RunType | None = None
 
     def start_run(self, manager_config, logged_param_config: BaseModel) -> RunType:
@@ -24,9 +26,9 @@ class BaseExperimentManager(Generic[RunType]):
 
         Parameters
         ----------
-        manager_config : ConfigType
+        manager_config
             Configuration for the experiment manager.
-        logged_param_config : ConfigType
+        logged_param_config
             Configuration for the logged parameters.
 
         Returns

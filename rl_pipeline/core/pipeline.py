@@ -6,11 +6,11 @@ import yaml
 from .eval import PolicyEvalStats
 from .experiment import ExperimentManagerType
 from .loader import EnvLoaderType, ModelLoaderType
-from .typing import ConfigType
+from .typing import PipelineConfigType
 
 
 class BasePipeline(
-    Generic[ConfigType, EnvLoaderType, ModelLoaderType, ExperimentManagerType]
+    Generic[PipelineConfigType, EnvLoaderType, ModelLoaderType, ExperimentManagerType]
 ):
     """
     Base class for training pipelines.
@@ -21,8 +21,8 @@ class BasePipeline(
     model_loader: ModelLoaderType
     experiment_manager: ExperimentManagerType | None = None
 
-    def __init__(self, config: ConfigType, verbose: bool = True):
-        self.config: ConfigType = config
+    def __init__(self, config: PipelineConfigType, verbose: bool = True):
+        self.config: PipelineConfigType = config
         self.verbose: bool = verbose
 
     def train(self) -> Any:
