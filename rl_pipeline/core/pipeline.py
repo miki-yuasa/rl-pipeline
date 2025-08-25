@@ -19,7 +19,7 @@ class BasePipeline(
 
     env_loader: EnvLoaderType
     model_loader: ModelLoaderType
-    experiment_manager: ExperimentManagerType
+    experiment_manager: ExperimentManagerType | None = None
 
     def __init__(self, config: ConfigType, verbose: bool = True):
         self.config: ConfigType = config

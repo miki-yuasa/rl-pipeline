@@ -1,5 +1,5 @@
 from .config import SaveConfig
-from .experiment import BaseExperimentManager, ManagerConfigType
+from .experiment import BaseExperimentManager, ExperimentManagerConfig
 from .loader import BaseEnvLoader, BaseModelLoader
 from .pipeline import BasePipeline
 
@@ -9,5 +9,5 @@ __all__ = [
     "BasePipeline",
     "SaveConfig",
     "BaseExperimentManager",
-    "ManagerConfigType",
+    "ExperimentManagerConfig",
 ]
