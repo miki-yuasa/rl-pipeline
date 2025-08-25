@@ -28,6 +28,16 @@ def test_sb3_pipeline_config_reader():
             "tb_dir": "tb",
         },
         "wrapper_config_file": None,
+        "experiment_manager_config": {
+            "callback_config": {"gradient_save_freq": 50},
+            "manager_class": "rl_pipeline.sb3.SB3ExperimentManager",
+            "manager_config": {
+                "monitor_gym": False,
+                "project": "rl_pipeline_test",
+                "save_code": False,
+                "sync_tensorboard": True,
+            },
+        },
     }
     config_file_path: str = "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
 

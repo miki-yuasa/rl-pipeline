@@ -33,10 +33,11 @@
   "algo_config": {
     "algorithm": "stable_baselines3.ppo.ppo.PPO",
     "algo_kwargs": {
+      "policy": "MlpPolicy",
       "n_steps": 100,
       "batch_size": 1000,
       "n_epochs": 10,
-      "learning_rate": "3e-4",
+      "learning_rate": 0.0003,
       "ent_coef": 0.0,
       "clip_range": 0.2
     }
@@ -58,18 +59,28 @@
       "render": false
     },
     "ckpt_callback_config": {
-      "save_freq": 10,
+      "save_freq": 50,
       "save_path": "tests/sb3/out/models/1.a/cartpole_model_1.0K/ckpts",
       "name_prefix": "ckpt",
       "save_replay_buffer": false,
       "verbose": 0
     },
     "video_recorder_callback_config": {
-      "render_freq": 10,
+      "render_freq": 50,
       "save_dir": "tests/sb3/out/models/1.a/cartpole_model_1.0K/ckpts",
       "name_prefix": "ckpt",
       "file_ext": "gif",
       "deterministic": false
     }
+  },
+  "experiment_manager_config": {
+    "manager_class": "rl_pipeline.sb3.experiment.base.SB3ExperimentManager",
+    "manager_config": {
+      "project": "rl_pipeline_test",
+      "sync_tensorboard": true,
+      "monitor_gym": false,
+      "save_code": false
+    },
+    "callback_config": { "gradient_save_freq": 50 }
   }
 }

@@ -8,3 +8,12 @@ config_dir: tests/sb3/assets/configs
 env_config_file: cartpole_env_config.yaml
 wrapper_config_file: null
 model_config_file: ppo.yaml
+experiment_manager_config:
+  manager_class: rl_pipeline.sb3.SB3ExperimentManager
+  manager_config:
+    project: rl_pipeline_test
+    sync_tensorboard: true
+    monitor_gym: false
+    save_code: false
+  callback_config:
+    gradient_save_freq: 50
