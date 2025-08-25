@@ -1,7 +1,8 @@
 from typing import Any, Literal, Sequence
 
 import wandb
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from wandb.integration.sb3 import WandbCallback
 from wandb.sdk.lib.paths import StrPath
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.wandb_settings import Settings
@@ -217,7 +218,7 @@ class WandbInitConfig(BaseModel):
     settings: Settings | dict[str, Any] | None = None
 
 
-class WandbExperimentManager(BaseExperimentManager[WandbInitConfig, Run]):
+class WandbExperimentManager(BaseExperimentManager[Run]):
     """
     Experiment manager for Weights & Biases (wandb).
     """
@@ -244,9 +245,10 @@ class WandbExperimentManager(BaseExperimentManager[WandbInitConfig, Run]):
         run = wandb.init(
             **manager_config.model_dump(), config=logged_param_config.dict()
         )
+        self.run = run
         return run
 
-    def end_run(self, run: Run) -> None:
+    def end_run(self) -> None:
         """
         End the current wandb run.
 
@@ -256,4 +258,10 @@ class WandbExperimentManager(BaseExperimentManager[WandbInitConfig, Run]):
             The wandb run to be ended.
 
         """
-        run.finish()
+        if self.run:
+            self.run.finish()
+            self.run = None
+        else:
+            Warning(
+                "Wandb run is not active. Call `start_run()` to begin a new run first."
+            )
