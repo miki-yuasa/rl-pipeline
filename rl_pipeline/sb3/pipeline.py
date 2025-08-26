@@ -309,3 +309,30 @@ class SB3ReplicatePipeline:
             )
             eval_results.extend(result)
         return eval_results
+
+    def load_models(
+        self,
+        ckpt_timestep: int | Literal["latest", "final", "best"] = "final",
+        env: Env | Wrapper | None = None,
+        device: str | None = None,
+    ) -> list[BaseAlgorithm]:
+        models = []
+        for ind_pipeline in self.ind_pipelines:
+            model = ind_pipeline.load_model(
+                ckpt_timestep=ckpt_timestep, env=env, device=device
+            )
+            models.append(model)
+        return models
+
+    def record_replays(
+        self,
+        models: list[BaseAlgorithm],
+        verbose: bool = True,
+    ) -> None:
+        """
+        Record a replay of the model's performance in the evaluation environment.
+        """
+        assert len(models) == len(self.ind_pipelines)
+
+        for model, ind_pipeline in zip(models, self.ind_pipelines):
+            ind_pipeline.record_replay(model, verbose=verbose)
