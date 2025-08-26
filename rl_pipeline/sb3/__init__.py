@@ -13,6 +13,7 @@ from .config import (
     SB3LearnConfig,
     SB3ModelConfig,
     SB3PipelineConfig,
+    SB3ReplicatePipelineConfig,
 )
 from .config_reader import (
     CheckpointCallbackConfigReader,
@@ -24,6 +25,7 @@ from .config_reader import (
     SB3LearnConfigReader,
     SB3ModelConfigReader,
     SB3PipelineConfigReader,
+    SB3ReplicatePipelineConfigReader,
     VideoRecorderCallbackConfigReader,
 )
 from .experiment import (
@@ -32,12 +34,13 @@ from .experiment import (
     SB3WandbExperimentManager,
 )
 from .loader import SB3EnvLoader, SB3ModelLoader
-from .pipeline import SB3Pipeline
+from .pipeline import SB3Pipeline, SB3ReplicatePipeline
 
 __all__ = [
     "SB3PipelineConfig",
     "SB3PipelineConfigReader",
     "SB3Pipeline",
+    "SB3ReplicatePipeline",
     "SB3EnvLoader",
     "SB3ModelLoader",
     "SB3ExperimentManager",
@@ -50,6 +53,7 @@ __all__ = [
     "SB3LearnConfig",
     "SB3ModelConfig",
     "SB3PipelineConfig",
+    "SB3ReplicatePipelineConfig",
     "CheckpointCallbackConfig",
     "EvalCallbackConfig",
     "VideoRecorderCallbackConfig",
@@ -65,4 +69,5 @@ __all__ = [
     "SB3PipelineConfigReader",
     "VideoRecorderCallbackConfigReader",
     "SB3ExperimentManagerConfigReader",
+    "SB3ReplicatePipelineConfigReader",
 ]
