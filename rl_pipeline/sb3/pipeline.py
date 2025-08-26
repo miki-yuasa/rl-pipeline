@@ -1,5 +1,5 @@
 import os
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import numpy as np
 from gymnasium import Env, Wrapper
@@ -253,7 +253,11 @@ class SB3Pipeline(
         return eval_result
 
     def record_replay(
-        self, model: BaseAlgorithm, save_path: str | None = None, verbose: bool = True
+        self,
+        model: BaseAlgorithm,
+        save_path: str | None = None,
+        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None] | None = None,
+        verbose: bool = True,
     ) -> None:
         """
         Record a replay of the model's performance in the evaluation environment.
@@ -261,7 +265,8 @@ class SB3Pipeline(
         if save_path is None:
             save_path = self.save_config.animation_save_path
 
-        record_replay(self.env_loader.env(), model, save_path, self.verbose or verbose)
+        player = custom_player if custom_player is not None else record_replay
+        player(self.env_loader.env(), model, save_path, self.verbose or verbose)
 
 
 class SB3ReplicatePipeline:
@@ -327,6 +332,7 @@ class SB3ReplicatePipeline:
     def record_replays(
         self,
         models: list[BaseAlgorithm],
+        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None] | None = None,
         verbose: bool = True,
     ) -> None:
         """
@@ -335,4 +341,6 @@ class SB3ReplicatePipeline:
         assert len(models) == len(self.ind_pipelines)
 
         for model, ind_pipeline in zip(models, self.ind_pipelines):
-            ind_pipeline.record_replay(model, verbose=verbose)
+            ind_pipeline.record_replay(
+                model, custom_player=custom_player, verbose=verbose
+            )

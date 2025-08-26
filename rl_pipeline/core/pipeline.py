@@ -63,7 +63,13 @@ class BasePipeline(
             "Subclasses should implement the load_model method to load a pre-trained model."
         )
 
-    def record_replay(self, model: Any, save_path: str | None = None):
+    def record_replay(
+        self,
+        model: Any,
+        save_path: str | None = None,
+        custom_player=None,
+        verbose: bool = True,
+    ):
         """
         Placeholder for recording a replay of the model.
         Should be implemented in subclasses.
