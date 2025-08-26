@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from rl_pipeline.core import SaveConfig
+from rl_pipeline.core import ReplicateConfig, SaveConfig
 from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
 
 from .callback import (
@@ -97,3 +97,8 @@ class SB3ModelConfig(BaseModel):
     learn_config: SB3LearnConfig
     vec_config: MakeVecEnvConfig | None = None
     callback_config: SB3CallbackConfig
+
+
+class SB3ReplicatePipelineConfig(BaseModel):
+    replicate_config: ReplicateConfig
+    ind_pipeline_configs: list[SB3PipelineConfig]

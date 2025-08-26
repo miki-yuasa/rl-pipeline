@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -43,3 +43,19 @@ class SB3ExperimentManager(Generic[RunType, PipelineConfigType]):
         ...
 
     def end_run(self) -> None: ...
+
+    @staticmethod
+    def add_run_name_suffix(manager_config, run_name_suffix: str) -> Any:
+        """
+        Add a suffix to the run name in the manager config.
+        Default behavior is just passing.
+
+        Parameters
+        ----------
+        manager_config
+            The manager configuration dictionary.
+        run_name_suffix : str
+            The suffix to add to the run name.
+        """
+
+        return manager_config

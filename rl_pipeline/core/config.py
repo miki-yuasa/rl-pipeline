@@ -2,7 +2,7 @@ import os
 from typing import Generic, Self
 
 import yaml
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 
 from rl_pipeline.core.typing import ConfigType
 from rl_pipeline.core.utils.io import replace_extension
@@ -61,11 +61,14 @@ class SaveConfigReader(BaseModel, YAMLReaderMixin):
     include_model_name_suffix: bool = True
 
     def to_config(
-        self, experiment_id: str = "", model_name_suffix: str = ""
+        self,
+        experiment_id: str = "",
+        model_name_suffix: str = "",
+        replicate_signature: str = "",
     ) -> SaveConfig:
         model_full_name: str = self.model_name + model_name_suffix
         model_save_dir: str = os.path.join(
-            self.models_dir, experiment_id, model_full_name
+            self.models_dir, experiment_id, model_full_name, replicate_signature
         )
         model_filename: str = self._model_filename(experiment_id + model_name_suffix)
         model_save_path: str = os.path.join(model_save_dir, model_filename)
@@ -104,3 +107,9 @@ class SaveConfigReader(BaseModel, YAMLReaderMixin):
             return f"{base}_{suffix}{ext}"
         else:
             return self.model_filename
+
+
+class ReplicateConfig(BaseModel):
+    num_replicates: int = Field(ge=1, default=1)
+    replicate_start_id: int = Field(ge=0, default=0)
+    replicate_signature: str = "{rep_id}"

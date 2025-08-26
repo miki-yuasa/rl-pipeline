@@ -14,7 +14,12 @@ from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
 from .callback import SuccessEvalCallback, VideoRecorderCallback
-from .config import SB3CallbackConfig, SB3LearnConfig, SB3PipelineConfig
+from .config import (
+    SB3CallbackConfig,
+    SB3LearnConfig,
+    SB3PipelineConfig,
+    SB3ReplicatePipelineConfig,
+)
 from .experiment import SB3ExperimentManager
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
@@ -257,3 +262,50 @@ class SB3Pipeline(
             save_path = self.save_config.animation_save_path
 
         record_replay(self.env_loader.env(), model, save_path, self.verbose or verbose)
+
+
+class SB3ReplicatePipeline:
+    def __init__(self, config: SB3ReplicatePipelineConfig, verbose: bool = True):
+        self.replicate_config = config.replicate_config
+        self.ind_pipeline_configs = config.ind_pipeline_configs
+        self.ind_pipelines: list[SB3Pipeline] = [
+            SB3Pipeline(config=ind_config, verbose=verbose)
+            for ind_config in self.ind_pipeline_configs
+        ]
+        self.verbose = verbose
+
+    def train(self) -> list[BaseAlgorithm]:
+        models: list[BaseAlgorithm] = []
+        for ind_pipeline in self.ind_pipelines:
+            model = ind_pipeline.train()
+            models.append(model)
+
+        return models
+
+    def train_on_unsaved_model(self):
+        models: list[BaseAlgorithm] = []
+        for ind_pipeline in self.ind_pipelines:
+            model = ind_pipeline.train_on_unsaved_model()
+            models.append(model)
+
+        return models
+
+    def evaluate(
+        self,
+        n_eval_episodes: int = 100,
+        deterministic: bool = False,
+        save_to_file: bool = True,
+        eval_file_name: str = "model_eval.yaml",
+        checkpoint: int | Literal["latest", "final", "best"] | BaseAlgorithm = "final",
+    ) -> list[PolicyEvalStats]:
+        eval_results = []
+        for ind_pipeline in self.ind_pipelines:
+            result = ind_pipeline.evaluate(
+                n_eval_episodes=n_eval_episodes,
+                deterministic=deterministic,
+                save_to_file=save_to_file,
+                eval_file_name=eval_file_name,
+                checkpoint=checkpoint,
+            )
+            eval_results.extend(result)
+        return eval_results

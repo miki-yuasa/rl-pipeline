@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from rl_pipeline.core.config import (
+from rl_pipeline.core import (
     ConfigReader,
+    ReplicateConfig,
     SaveConfig,
     SaveConfigReader,
     YAMLReaderMixin,
@@ -35,7 +36,9 @@ from .config import (
     SB3LearnConfig,
     SB3ModelConfig,
     SB3PipelineConfig,
+    SB3ReplicatePipelineConfig,
 )
+from .experiment.base import SB3ExperimentManager
 
 
 class SB3AlgorithmConfigReader(
@@ -185,14 +188,17 @@ class SB3ExperimentManagerConfigReader(
     manager_config: dict[str, Any]
     callback_config: dict[str, Any]
 
-    def to_config(self) -> SB3ExperimentManagerConfig:
-        manager_class = get_class(self.manager_class)
+    def to_config(self, run_name_suffix: str = "") -> SB3ExperimentManagerConfig:
+        manager_class: type[SB3ExperimentManager] | None = get_class(self.manager_class)
+        updated_manager_config = SB3ExperimentManager.add_run_name_suffix(
+            self.manager_config, run_name_suffix
+        )
         assert manager_class is not None, (
             f"Could not find experiment manager class for {self.manager_class}"
         )
         return SB3ExperimentManagerConfig(
             manager_class=manager_class,
-            manager_config=self.manager_config,
+            manager_config=updated_manager_config,
             callback_config=self.callback_config,
         )
 
@@ -305,4 +311,117 @@ class SB3PipelineConfigReader(
     def _to_manager_config(self) -> SB3ExperimentManagerConfig | None:
         if self.experiment_manager_config:
             return self.experiment_manager_config.to_config()
+        return None
+
+
+class SB3ReplicatePipelineConfigReader(
+    BaseModel, ConfigReader[SB3ReplicatePipelineConfig], YAMLReaderMixin
+):
+    """Configuration reader for SB3 replicate pipeline."""
+
+    device: str | int = "cuda:0"
+    experiment_id: str = ""
+    retrain_model: bool = False
+    replicate_config: ReplicateConfig
+    save_config: SaveConfigReader
+    config_dir: str = "configs"
+    env_config_file: str = "env_config.yaml"
+    wrapper_config_file: str | None = None
+    model_config_file: str = "model_config.yaml"
+    experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
+
+    def to_config(self) -> SB3ReplicatePipelineConfig:
+        replicate_pipeline_configs: list[SB3PipelineConfig] = []
+        for rep_id in range(self.replicate_config.num_replicates):
+            device: str = (
+                self.device if isinstance(self.device, str) else f"cuda:{self.device}"
+            )
+
+            env_config: MakeEnvConfig = self._to_env_config()
+            wrapper_config: WrapperConfig | None = self._to_wrapper_config()
+
+            model_config_reader: SB3ModelConfigReader = self._to_model_config_reader()
+
+            save_config: SaveConfig = self._to_save_config(rep_id)
+
+            model_config: SB3ModelConfig = model_config_reader.to_config(
+                save_config=save_config
+            )
+
+            vec_config = model_config.vec_config
+            algo_config = model_config.algo_config
+            learn_config = model_config.learn_config
+            callback_config = model_config.callback_config
+
+            experiment_manager_config: SB3ExperimentManagerConfig | None = (
+                self._to_manager_config(rep_id=rep_id)
+            )
+
+            pipeline_config = SB3PipelineConfig(
+                device=device,
+                experiment_id=self.experiment_id,
+                retrain_model=self.retrain_model,
+                save_config=save_config,
+                env_config=env_config,
+                wrapper_config=wrapper_config,
+                vec_config=vec_config,
+                algo_config=algo_config,
+                learn_config=learn_config,
+                callback_config=callback_config,
+                experiment_manager_config=experiment_manager_config,
+            )
+
+            replicate_pipeline_configs.append(pipeline_config)
+
+        pipeline_config = SB3ReplicatePipelineConfig(
+            replicate_config=self.replicate_config,
+            ind_pipeline_configs=replicate_pipeline_configs,
+        )
+
+        return pipeline_config
+
+    def _to_env_config(self) -> MakeEnvConfig:
+        env_config: MakeEnvConfig = read_config_dict_from_yaml(
+            self.config_dir, self.env_config_file, MakeEnvConfig
+        )
+        return env_config
+
+    def _to_wrapper_config(self) -> WrapperConfig | None:
+        if self.wrapper_config_file:
+            wrapper_config_reader = read_config_dict_from_yaml(
+                self.config_dir, self.wrapper_config_file, WrapperConfigReader
+            )
+            wrapper_config = wrapper_config_reader.to_config()
+            return wrapper_config
+        return None
+
+    def _to_model_config_reader(self) -> SB3ModelConfigReader:
+        model_config_reader: SB3ModelConfigReader = read_config_dict_from_yaml(
+            self.config_dir, self.model_config_file, SB3ModelConfigReader
+        )
+
+        return model_config_reader
+
+    def _to_save_config(self, rep_id: int) -> SaveConfig:
+        model_config_reader = self._to_model_config_reader()
+        return self.save_config.to_config(
+            experiment_id=self.experiment_id,
+            model_name_suffix="_"
+            + format_large_number(model_config_reader.learn_config.total_timesteps),
+            replicate_signature=self.replicate_config.replicate_signature.format(
+                rep_id=rep_id + self.replicate_config.replicate_start_id
+            ),
+        )
+
+    def _to_manager_config(self, rep_id: int) -> SB3ExperimentManagerConfig | None:
+        replicate_signature: str = (
+            "_"
+            + self.replicate_config.replicate_signature.format(
+                rep_id=rep_id + self.replicate_config.replicate_start_id
+            )
+        )
+        if self.experiment_manager_config:
+            return self.experiment_manager_config.to_config(
+                run_name_suffix=replicate_signature
+            )
         return None

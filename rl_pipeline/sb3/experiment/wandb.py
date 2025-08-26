@@ -1,11 +1,12 @@
+import copy
 from typing import Any, Generic, Literal
 
 from pydantic import BaseModel, Field
-from wandb.integration.sb3 import WandbCallback
-from wandb.sdk.wandb_run import Run
 
 from rl_pipeline.core import PipelineConfigType
 from rl_pipeline.experiment.wandb import WandbExperimentManager, WandbInitConfig
+from wandb.integration.sb3 import WandbCallback
+from wandb.sdk.wandb_run import Run
 
 from .base import SB3ExperimentManager
 
@@ -55,3 +56,20 @@ class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
         return WandbCallback(
             **callback_config_dict,
         )
+
+    @staticmethod
+    def add_run_name_suffix(
+        manager_config: dict[str, Any] | WandbInitConfig, run_name_suffix: str
+    ) -> dict[str, Any] | WandbInitConfig:
+        # Copy manager_config
+        manager_config_copy = copy.deepcopy(manager_config)
+        if isinstance(manager_config_copy, dict):
+            if "name" in manager_config_copy and isinstance(
+                manager_config_copy["name"], str
+            ):
+                manager_config_copy["name"] += run_name_suffix
+        else:
+            if manager_config_copy.name:
+                manager_config_copy.name += run_name_suffix
+
+        return manager_config
