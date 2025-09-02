@@ -1,5 +1,5 @@
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from pydantic import BaseModel
 
 
@@ -96,3 +96,42 @@ def compute_basic_stats(data: ArrayLike) -> BasicStats:
         min=float(np.min(data)),
         max=float(np.max(data)),
     )
+
+
+def scaled_same_convolve(xx: NDArray, size: int):
+    """
+    Convolve an array with the `same` mode with corrected scaling
+    by the number of actual elements averaged.
+
+    Parameters
+    ----------
+    xx : NDArray
+        Input array to be convolved.
+    size : int
+        Size of the convolution window.
+
+    Returns
+    -------
+    xx_mean : NDArray
+        The convolved and scaled array.
+    """
+    b = np.ones(size) / size
+    xx_mean = np.convolve(xx, b, mode="same")
+
+    # Precompute constants
+    half_size = size // 2
+    is_odd = size % 2
+
+    # Vectorized edge correction
+    if half_size > 0:
+        # Left edge corrections
+        left_indices = np.arange(half_size)
+        left_corrections = size / (left_indices + half_size + is_odd)
+        xx_mean[:half_size] *= left_corrections
+
+        # Right edge corrections
+        right_indices = np.arange(1, half_size + 1)[::-1]
+        right_corrections = size / (right_indices + half_size)
+        xx_mean[-half_size:] *= right_corrections
+
+    return xx_mean
