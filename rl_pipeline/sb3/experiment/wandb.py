@@ -64,12 +64,10 @@ class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
         # Copy manager_config
         manager_config_copy = copy.deepcopy(manager_config)
         if isinstance(manager_config_copy, dict):
-            if "name" in manager_config_copy and isinstance(
-                manager_config_copy["name"], str
-            ):
-                manager_config_copy["name"] += run_name_suffix
+            if "name" in manager_config_copy and manager_config_copy["name"]:
+                manager_config_copy["name"] += f"_{run_name_suffix}"
         else:
             if manager_config_copy.name:
-                manager_config_copy.name += run_name_suffix
+                manager_config_copy.name += f"_{run_name_suffix}"
 
-        return manager_config
+        return manager_config_copy

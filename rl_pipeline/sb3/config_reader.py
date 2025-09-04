@@ -408,19 +408,17 @@ class SB3ReplicatePipelineConfigReader(
         model_config_reader = self._to_model_config_reader()
         return self.save_config.to_config(
             experiment_id=self.experiment_id,
-            model_name_suffix="_"
-            + format_large_number(model_config_reader.learn_config.total_timesteps),
+            model_name_suffix=format_large_number(
+                model_config_reader.learn_config.total_timesteps
+            ),
             replicate_signature=self.replicate_config.replicate_signature.format(
                 rep_id=rep_id + self.replicate_config.replicate_start_id
             ),
         )
 
     def _to_manager_config(self, rep_id: int) -> SB3ExperimentManagerConfig | None:
-        replicate_signature: str = (
-            "_"
-            + self.replicate_config.replicate_signature.format(
-                rep_id=rep_id + self.replicate_config.replicate_start_id
-            )
+        replicate_signature: str = self.replicate_config.replicate_signature.format(
+            rep_id=rep_id + self.replicate_config.replicate_start_id
         )
         if self.experiment_manager_config:
             return self.experiment_manager_config.to_config(
