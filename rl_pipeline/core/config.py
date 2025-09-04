@@ -58,7 +58,7 @@ class SaveConfigReader(BaseModel, YAMLReaderMixin):
     eval_metrics_filename: str = "eval_metrics.yaml"
     animation_dir: str = "animations"
     animation_ext: str = "gif"
-    include_model_name_suffix: bool = True
+    include_suffix_in_filename: bool = True
 
     def to_config(
         self,
@@ -101,7 +101,7 @@ class SaveConfigReader(BaseModel, YAMLReaderMixin):
         return save_config
 
     def _model_filename(self, suffix: str = "") -> str:
-        if suffix:
+        if self.include_suffix_in_filename and suffix:
             # Get base and extension from model_save_path
             base, ext = os.path.splitext(self.model_filename)
             return f"{base}_{suffix}{ext}"
