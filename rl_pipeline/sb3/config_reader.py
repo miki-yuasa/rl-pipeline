@@ -291,7 +291,8 @@ class SB3PipelineConfigReader(
             )
             wrapper_config = wrapper_config_reader.to_config()
             return wrapper_config
-        return None
+        else:
+            return None
 
     def _to_model_config_reader(self) -> SB3ModelConfigReader:
         model_config_reader: SB3ModelConfigReader = read_config_dict_from_yaml(
