@@ -1,6 +1,6 @@
 import importlib
 import os
-from typing import Literal
+from typing import Literal, overload
 
 import yaml
 from pydantic import ValidationError
@@ -23,6 +23,10 @@ def replace_extension(filepath: str, new_ext: str) -> str:
     return f"{base}.{new_ext}"
 
 
+@overload
+def get_class(cls_name: None) -> None: ...
+@overload
+def get_class(cls_name: str) -> type: ...
 def get_class(cls_name: str | None) -> type | None:
     """Get a class by its name from the module."""
     if cls_name and "." in cls_name:
