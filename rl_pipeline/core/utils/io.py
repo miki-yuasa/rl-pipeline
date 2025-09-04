@@ -132,11 +132,16 @@ def get_ckpt_file(
     return ckpt_file
 
 
+def read_dict_from_yaml(filepath: str) -> dict:
+    with open(filepath, "r") as f:
+        data = yaml.safe_load(f)
+    return data
+
+
 def read_config_dict_from_yaml(
     config_dir: str, config_file: str, config_class: type[ConfigType]
 ) -> ConfigType:
-    with open(os.path.join(config_dir, config_file), "r") as f:
-        config_dict = yaml.safe_load(f)
+    config_dict = read_dict_from_yaml(os.path.join(config_dir, config_file))
 
     try:
         return config_class(**config_dict)
