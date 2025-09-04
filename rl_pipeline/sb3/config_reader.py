@@ -305,8 +305,9 @@ class SB3PipelineConfigReader(
         model_config_reader = self._to_model_config_reader()
         return self.save_config.to_config(
             experiment_id=self.experiment_id,
-            model_name_suffix="_"
-            + format_large_number(model_config_reader.learn_config.total_timesteps),
+            model_name_suffix=format_large_number(
+                model_config_reader.learn_config.total_timesteps
+            ),
         )
 
     def _to_manager_config(self) -> SB3ExperimentManagerConfig | None:
