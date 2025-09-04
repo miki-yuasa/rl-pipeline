@@ -9,6 +9,7 @@ from .eval import PolicyEvalStats
 from .experiment import ExperimentManagerType
 from .loader import EnvLoaderType, ModelLoaderType
 from .typing import PipelineConfigType
+from .utils.signature import exp_time, unique_id
 
 
 class BasePipeline(
@@ -105,8 +106,8 @@ class BasePipeline(
 
     def unique_id(self) -> str:
         """Generate a unique identifier for the training run."""
-        return str(uuid.uuid4())[:4]
+        return unique_id()
 
     def exp_time(self) -> str:
         """Get the current time formatted for the experiment."""
-        return datetime.now().strftime("%m-%d_%H-%M-%S.%f")
+        return exp_time()

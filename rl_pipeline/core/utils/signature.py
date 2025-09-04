@@ -7,6 +7,6 @@ def unique_id() -> str:
     return str(uuid.uuid4())[:4]
 
 
-def exp_time(self) -> str:
+def exp_time() -> str:
     """Get the current time formatted for the experiment."""
     return datetime.now().strftime("%m-%d_%H-%M-%S.%f")
