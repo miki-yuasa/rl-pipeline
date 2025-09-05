@@ -6,6 +6,7 @@ from gymnasium import Env, Wrapper
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.type_aliases import PolicyPredictor
 from stable_baselines3.common.vec_env import VecEnv
 
 from rl_pipeline.core.config import SaveConfig
@@ -196,17 +197,20 @@ class SB3Pipeline(
         deterministic: bool = False,
         save_to_file: bool = True,
         eval_file_name: str = "model_eval.yaml",
-        checkpoint: int | Literal["latest", "final", "best"] | BaseAlgorithm = "final",
+        checkpoint: int
+        | Literal["latest", "final", "best"]
+        | PolicyPredictor = "final",
     ) -> PolicyEvalStats:
         """Evaluate the final model."""
 
         if self.verbose:
             print(f"SB3Pipeline: Evaluating the {checkpoint} model...")
 
-        if isinstance(checkpoint, BaseAlgorithm):
-            model: BaseAlgorithm = checkpoint
+        model: PolicyPredictor
+        if isinstance(checkpoint, int) or isinstance(checkpoint, str):
+            model = self.load_model(ckpt_timestep=checkpoint)
         else:
-            model: BaseAlgorithm = self.load_model(checkpoint)
+            model = checkpoint
 
         success_buffer = SuccessBuffer()
         episode_rewards, episode_lengths = evaluate_policy(
