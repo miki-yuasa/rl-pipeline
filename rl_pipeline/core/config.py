@@ -66,12 +66,18 @@ class SaveConfigReader(BaseModel, YAMLReaderMixin):
         model_name_suffix: str = "",
         replicate_signature: str = "",
     ) -> SaveConfig:
-        model_full_name: str = self.model_name + model_name_suffix
+        model_full_name: str = self.model_name + "_" + model_name_suffix
         model_save_dir: str = os.path.join(
             self.models_dir, experiment_id, model_full_name, replicate_signature
         )
         model_filename: str = self._model_filename(
-            "_".join([experiment_id, model_name_suffix, replicate_signature])
+            "_".join(
+                [
+                    s
+                    for s in [experiment_id, model_name_suffix, replicate_signature]
+                    if s
+                ]
+            )
         )
         model_save_path: str = os.path.join(model_save_dir, model_filename)
         best_model_save_path: str = os.path.join(
