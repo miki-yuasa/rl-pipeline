@@ -19,6 +19,7 @@ def record_replay(
         # Ensure action is a numpy int64 scalar
         obs, reward, terminated, truncated, info = demo_env.step(action)
         if verbose:
+            print(f"Step {len(rewards) + 1}:")
             print(
                 f" - Reward: {reward:.2f}, Terminated: {terminated}, Truncated: {truncated}, Success: {info.get('is_success', 'N/A')}"
             )
