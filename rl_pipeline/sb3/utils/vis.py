@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 
 import imageio
 from gymnasium import Env
@@ -21,6 +22,8 @@ def record_replay(
             print(
                 f" - Reward: {reward:.2f}, Terminated: {terminated}, Truncated: {truncated}, Success: {info.get('is_success', 'N/A')}"
             )
+            print(" - Info: ")
+            pprint(info)
         rewards.append(reward)  # type: ignore
         frame = demo_env.render()
         frames.append(frame)
