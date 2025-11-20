@@ -1,4 +1,4 @@
-from typing import Generic, Literal
+from typing import Any, Generic, Literal
 
 import gymnasium as gym
 from gymnasium import Env, Wrapper
@@ -54,13 +54,19 @@ class SB3EnvLoader(
             wrapper_class = self.wrapper_config.wrapper_class
             wrapper_kwargs = self.wrapper_config.wrapper_kwargs
 
+        env_kwargs: dict[str, Any] = self.env_config.env_kwargs | {
+            "max_episode_steps": self.env_config.max_episode_steps,
+            "disable_env_checker": self.env_config.disable_env_checker,
+            "render_mode": self.env_config.render_mode,
+        }
+
         return make_vec_env(
             env_id=self.env_config.id,
             n_envs=self.vec_config.n_envs,
             seed=self.vec_config.seed,
             start_index=self.vec_config.start_index,
             monitor_dir=self.vec_config.monitor_dir,
-            env_kwargs=self.env_config.env_kwargs,
+            env_kwargs=env_kwargs,
             wrapper_class=wrapper_class,
             wrapper_kwargs=wrapper_kwargs,
             vec_env_cls=self.vec_config.vec_env_cls,
