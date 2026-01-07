@@ -200,6 +200,7 @@ class SB3Pipeline(
         checkpoint: int
         | Literal["latest", "final", "best"]
         | PolicyPredictor = "final",
+        env: Literal["single", "vec"] | Env = "vec",
     ) -> PolicyEvalStats:
         """Evaluate the final model."""
 
@@ -212,10 +213,20 @@ class SB3Pipeline(
         else:
             model = checkpoint
 
+        match env:
+            case "single":
+                eval_env = self.env_loader.env()
+            case "vec":
+                eval_env = self.env_loader.vec_env()
+            case Env():
+                eval_env = env
+            case _:
+                raise ValueError("Invalid env type for evaluation.")
+
         success_buffer = SuccessBuffer()
         episode_rewards, episode_lengths = evaluate_policy(
             model,
-            self.env_loader.vec_env(),
+            eval_env,
             n_eval_episodes=n_eval_episodes,
             deterministic=deterministic,
             return_episode_rewards=True,
