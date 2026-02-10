@@ -20,9 +20,13 @@ def record_replay(
         obs, reward, terminated, truncated, info = demo_env.step(action)
         if verbose:
             print(f"Step {len(rewards) + 1}:")
+            print(" - Action taken:")
+            pprint(action)
             print(
                 f" - Reward: {reward:.2f}, Terminated: {terminated}, Truncated: {truncated}, Success: {info.get('is_success', 'N/A')}"
             )
+            print(" - Observation: ")
+            pprint(obs)
             print(" - Info: ")
             pprint(info)
         rewards.append(reward)  # type: ignore
