@@ -2,8 +2,14 @@ import json
 from typing import Any
 
 import pytest
+from stable_baselines3.common.base_class import BaseAlgorithm
 
-from rl_pipeline.sb3 import SB3PipelineConfig, SB3PipelineConfigReader
+from rl_pipeline.sb3 import (
+    SB3AlgorithmConfigReader,
+    SB3PipelineConfig,
+    SB3PipelineConfigReader,
+    config_reader,
+)
 
 
 def test_sb3_pipeline_config_reader():
@@ -62,3 +68,37 @@ def test_sb3_pipeline_config():
     json_config: dict[str, Any] = json.loads(pipeline_config.model_dump_json())
 
     assert json_config == target_config
+
+
+def test_sb3_algorithm_config_reader_falls_back_to_sb3_contrib(monkeypatch):
+    reader = SB3AlgorithmConfigReader(algorithm="RecurrentPPO")
+
+    class _DummyAlgo(BaseAlgorithm):
+        pass
+
+    def _mock_get_class(path: str):
+        if path == "stable_baselines3.RecurrentPPO":
+            raise AttributeError("missing in sb3")
+        if path == "sb3_contrib.RecurrentPPO":
+            return _DummyAlgo
+        raise AssertionError(f"Unexpected class path: {path}")
+
+    monkeypatch.setattr(config_reader, "get_class", _mock_get_class)
+    monkeypatch.setattr(config_reader.importlib.util, "find_spec", lambda _: object())
+
+    config = reader.to_config()
+
+    assert config.algorithm is _DummyAlgo
+
+
+def test_sb3_algorithm_config_reader_raises_when_not_found(monkeypatch):
+    reader = SB3AlgorithmConfigReader(algorithm="MissingAlgo")
+
+    def _mock_get_class(_path: str):
+        raise AttributeError("missing")
+
+    monkeypatch.setattr(config_reader, "get_class", _mock_get_class)
+    monkeypatch.setattr(config_reader.importlib.util, "find_spec", lambda _: None)
+
+    with pytest.raises(AssertionError, match="MissingAlgo"):
+        reader.to_config()

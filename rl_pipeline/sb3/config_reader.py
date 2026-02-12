@@ -1,3 +1,4 @@
+import importlib.util
 import os
 from typing import Any, Generic, TypeVar
 
@@ -48,11 +49,20 @@ class SB3AlgorithmConfigReader(
     algo_kwargs: dict[str, Any] = {}
 
     def to_config(self) -> SB3AlgorithmConfig:
-        algo_class: type[BaseAlgorithm] | None = get_class(
-            "stable_baselines3." + self.algorithm
-        )
+        algo_class: type[BaseAlgorithm] | None = None
+
+        try:
+            algo_class = get_class("stable_baselines3." + self.algorithm)
+        except (ModuleNotFoundError, ImportError, AttributeError):
+            if importlib.util.find_spec("sb3_contrib") is not None:
+                try:
+                    algo_class = get_class("sb3_contrib." + self.algorithm)
+                except (ModuleNotFoundError, ImportError, AttributeError):
+                    algo_class = None
+
         assert algo_class is not None, (
-            f"Could not find algorithm class for {self.algorithm}"
+            "Could not find algorithm class for "
+            f"{self.algorithm} in stable_baselines3 or sb3_contrib"
         )
         return SB3AlgorithmConfig(
             algorithm=algo_class,
