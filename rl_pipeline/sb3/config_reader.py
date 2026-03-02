@@ -51,19 +51,23 @@ class SB3AlgorithmConfigReader(
     def to_config(self) -> SB3AlgorithmConfig:
         algo_class: type[BaseAlgorithm] | None = None
 
-        try:
-            algo_class = get_class("stable_baselines3." + self.algorithm)
-        except (ModuleNotFoundError, ImportError, AttributeError):
-            if importlib.util.find_spec("sb3_contrib") is not None:
-                try:
-                    algo_class = get_class("sb3_contrib." + self.algorithm)
-                except (ModuleNotFoundError, ImportError, AttributeError):
-                    algo_class = None
+        if "." in self.algorithm:
+            algo_class = get_class(self.algorithm)
+        else:
+            try:
+                algo_class = get_class("stable_baselines3." + self.algorithm)
+            except (ModuleNotFoundError, ImportError, AttributeError):
+                if importlib.util.find_spec("sb3_contrib") is not None:
+                    try:
+                        algo_class = get_class("sb3_contrib." + self.algorithm)
+                    except (ModuleNotFoundError, ImportError, AttributeError):
+                        algo_class = None
 
         assert algo_class is not None, (
             "Could not find algorithm class for "
             f"{self.algorithm} in stable_baselines3 or sb3_contrib"
         )
+
         return SB3AlgorithmConfig(
             algorithm=algo_class,
             algo_kwargs=self.algo_kwargs,
