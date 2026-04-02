@@ -102,3 +102,24 @@ def test_sb3_algorithm_config_reader_raises_when_not_found(monkeypatch):
 
     with pytest.raises(AssertionError, match="MissingAlgo"):
         reader.to_config()
+
+
+def test_arbitrary_callback_config_reader_to_config():
+    reader = config_reader.ArbitraryCallbackConfigReader(
+        callback_class="stable_baselines3.common.callbacks.CheckpointCallback",
+        callback_kwargs={"save_freq": 10, "save_path": "tmp"},
+    )
+
+    config = reader.to_config()
+
+    assert config.callback_class.__name__ == "CheckpointCallback"
+    assert config.callback_kwargs == {"save_freq": 10, "save_path": "tmp"}
+
+
+def test_arbitrary_callback_config_reader_rejects_non_callback_class():
+    reader = config_reader.ArbitraryCallbackConfigReader(
+        callback_class="pathlib.Path",
+    )
+
+    with pytest.raises(AssertionError, match="must inherit from BaseCallback"):
+        reader.to_config()

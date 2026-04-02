@@ -71,7 +71,8 @@
       "name_prefix": "ckpt",
       "file_ext": "gif",
       "deterministic": false
-    }
+    },
+    "arbitrary_callback_configs": []
   },
   "experiment_manager_config": {
     "manager_class": "rl_pipeline.sb3.experiment.wandb.SB3WandbExperimentManager",

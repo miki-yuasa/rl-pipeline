@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from rl_pipeline.core import ReplicateConfig, SaveConfig
@@ -60,10 +61,24 @@ class SB3LearnConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class ArbitraryCallbackConfig(BaseModel):
+    callback_class: type[BaseCallback]
+    callback_kwargs: dict[str, Any] = Field(default_factory=dict)
+
+    @field_serializer("callback_class", when_used="json")
+    def serialize_callback_class(self, callback_class: type[BaseCallback]) -> str:
+        return class_to_string(callback_class)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 class SB3CallbackConfig(BaseModel):
     eval_callback_config: EvalCallbackConfig
     ckpt_callback_config: CheckpointCallbackConfig
     video_recorder_callback_config: VideoRecorderCallbackConfig | None = None
+    arbitrary_callback_configs: list[ArbitraryCallbackConfig] = Field(
+        default_factory=list
+    )
 
 
 class SB3ExperimentManagerConfig(BaseModel):

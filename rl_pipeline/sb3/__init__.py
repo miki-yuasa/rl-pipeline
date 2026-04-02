@@ -6,6 +6,7 @@ from .callback import (
     VideoRecorderCallbackConfig,
 )
 from .config import (
+    ArbitraryCallbackConfig,
     MakeVecEnvConfig,
     SB3AlgorithmConfig,
     SB3CallbackConfig,
@@ -16,6 +17,7 @@ from .config import (
     SB3ReplicatePipelineConfig,
 )
 from .config_reader import (
+    ArbitraryCallbackConfigReader,
     CheckpointCallbackConfigReader,
     EvalCallbackConfigReader,
     MakeVecEnvConfigReader,
@@ -47,6 +49,7 @@ __all__ = [
     "SB3WandbExperimentManager",
     "SuccessEvalCallback",
     "VideoRecorderCallback",
+    "ArbitraryCallbackConfig",
     "MakeVecEnvConfig",
     "SB3AlgorithmConfig",
     "SB3CallbackConfig",
@@ -59,6 +62,7 @@ __all__ = [
     "VideoRecorderCallbackConfig",
     "SB3ExperimentManagerConfig",
     "SB3WandbCallbackConfig",
+    "ArbitraryCallbackConfigReader",
     "CheckpointCallbackConfigReader",
     "EvalCallbackConfigReader",
     "MakeVecEnvConfigReader",

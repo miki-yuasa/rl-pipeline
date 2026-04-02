@@ -44,6 +44,11 @@ def init_callback(
         )
         callbacks.append(video_callback)
 
+    for arbitrary_callback_config in callback_config.arbitrary_callback_configs:
+        callback_class = arbitrary_callback_config.callback_class
+        callback_instance = callback_class(**arbitrary_callback_config.callback_kwargs)
+        callbacks.append(callback_instance)
+
     return callbacks
 
 

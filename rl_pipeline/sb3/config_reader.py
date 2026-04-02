@@ -4,6 +4,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from rl_pipeline.core import (
@@ -30,6 +31,7 @@ from .callback import (
     VideoRecorderCallbackConfig,
 )
 from .config import (
+    ArbitraryCallbackConfig,
     MakeVecEnvConfig,
     SB3AlgorithmConfig,
     SB3CallbackConfig,
@@ -168,12 +170,36 @@ class VideoRecorderCallbackConfigReader(BaseModel, YAMLReaderMixin):
         )
 
 
+class ArbitraryCallbackConfigReader(BaseModel, YAMLReaderMixin):
+    callback_class: str
+    callback_kwargs: dict[str, Any] = Field(default_factory=dict)
+
+    def to_config(self) -> ArbitraryCallbackConfig:
+        callback_class: type | None = get_class(self.callback_class)
+        assert callback_class is not None, (
+            f"Could not find callback class for {self.callback_class}"
+        )
+        assert isinstance(callback_class, type) and issubclass(
+            callback_class, BaseCallback
+        ), (
+            f"Callback class {self.callback_class} must inherit from BaseCallback"
+        )
+
+        return ArbitraryCallbackConfig(
+            callback_class=callback_class,
+            callback_kwargs=self.callback_kwargs,
+        )
+
+
 class SB3CallbackConfigReader(BaseModel, YAMLReaderMixin):
     eval_callback_config: EvalCallbackConfigReader
     ckpt_callback_config: CheckpointCallbackConfigReader = (
         CheckpointCallbackConfigReader()
     )
     video_recorder_callback_config: VideoRecorderCallbackConfigReader | None = None
+    arbitrary_callback_configs: list[ArbitraryCallbackConfigReader] = Field(
+        default_factory=list
+    )
 
     def to_config(self, save_config: SaveConfig) -> SB3CallbackConfig:
         eval_callback_config = self.eval_callback_config.to_config(
@@ -187,11 +213,16 @@ class SB3CallbackConfigReader(BaseModel, YAMLReaderMixin):
             if self.video_recorder_callback_config
             else None
         )
+        arbitrary_callback_configs = [
+            callback_config.to_config()
+            for callback_config in self.arbitrary_callback_configs
+        ]
 
         return SB3CallbackConfig(
             eval_callback_config=eval_callback_config,
             ckpt_callback_config=ckpt_callback_config,
             video_recorder_callback_config=video_recorder_callback_config,
+            arbitrary_callback_configs=arbitrary_callback_configs,
         )
 
 
