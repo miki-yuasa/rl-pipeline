@@ -26,7 +26,7 @@ def test_sb3_pipeline_config_reader():
             "best_model_filename": "best_model.zip",
             "eval_dir": "eval",
             "eval_metrics_filename": "eval_metrics.yaml",
-            "include_model_name_suffix": True,
+            "include_suffix_in_filename": True,
             "model_filename": "final_model.zip",
             "model_name": "cartpole_model",
             "models_dir": "tests/sb3/out/models",
