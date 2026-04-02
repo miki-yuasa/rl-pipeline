@@ -8,7 +8,11 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from rl_pipeline.sb3 import SB3Pipeline, SB3PipelineConfigReader
 from rl_pipeline.sb3.callback import CheckpointCallbackConfig, EvalCallbackConfig
-from rl_pipeline.sb3.config import ArbitraryCallbackConfig, SB3CallbackConfig, SB3PipelineConfig
+from rl_pipeline.sb3.config import (
+    ArbitraryCallbackConfig,
+    SB3CallbackConfig,
+    SB3PipelineConfig,
+)
 from rl_pipeline.sb3.pipeline import init_callback
 
 

@@ -181,9 +181,7 @@ class ArbitraryCallbackConfigReader(BaseModel, YAMLReaderMixin):
         )
         assert isinstance(callback_class, type) and issubclass(
             callback_class, BaseCallback
-        ), (
-            f"Callback class {self.callback_class} must inherit from BaseCallback"
-        )
+        ), f"Callback class {self.callback_class} must inherit from BaseCallback"
 
         return ArbitraryCallbackConfig(
             callback_class=callback_class,
