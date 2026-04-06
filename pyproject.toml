@@ -7,9 +7,9 @@ authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0.0",
- "pydantic>=2.0.0",
- "pyyaml>=6.0.0",
- "tqdm>=4.67.1",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "tqdm>=4.67.1",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +21,7 @@ sb3 = [
     "tensorboard>=2.0.0",
 ]
 wandb = ["wandb>=0.16.0"]
+optuna = ["optuna>=4.0.0", "optuna-dashboard>=0.19.0"]
 
 [dependency-groups]
 dev = [
@@ -30,6 +31,8 @@ dev = [
     "imageio>=2.0.0",
     "tensorboard>=2.0.0",
     "wandb>=0.16.0",
+    "optuna>=4.0.0",
+    "optuna-dashboard>=0.19.0",
 ]
 
 [build-system]
