@@ -327,7 +327,10 @@ class SB3Pipeline(
             )
 
         if tune_config.dashboard.launch:
-            if self.optuna_dashboard_process is None or self.optuna_dashboard_process.poll() is not None:
+            if (
+                self.optuna_dashboard_process is None
+                or self.optuna_dashboard_process.poll() is not None
+            ):
                 self.optuna_dashboard_process = launch_dashboard(
                     storage_url=tune_config.storage_url,
                     host=tune_config.dashboard.host,
@@ -362,7 +365,6 @@ class SB3Pipeline(
 
             trial_sampler = _trial_sampler_from_config
         elif tune_config.sample_params_fn is not None:
-
             sample_params_fn = tune_config.sample_params_fn
             assert sample_params_fn is not None
 

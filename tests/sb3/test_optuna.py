@@ -11,9 +11,12 @@ from rl_pipeline.sb3 import (
     SB3Pipeline,
     SB3PipelineConfigReader,
 )
-from rl_pipeline.sb3.experiment.optuna import filter_algorithm_kwargs, sample_params
-from rl_pipeline.sb3.experiment.optuna import sample_params_from_config
 from rl_pipeline.sb3.config import SB3OptunaParamConfig
+from rl_pipeline.sb3.experiment.optuna import (
+    filter_algorithm_kwargs,
+    sample_params,
+    sample_params_from_config,
+)
 
 
 def test_sample_params_transforms_and_mappings():
