@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
-from importlib.metadata import PackageNotFoundError, version as pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 
 sys.path.insert(0, os.path.abspath(".."))
 DOCS_DIR = os.path.dirname(__file__)
@@ -51,8 +52,12 @@ intersphinx_mapping = {
     "optuna": ("https://optuna.readthedocs.io/en/stable", None),
 }
 
-templates_path = ["_templates"] if os.path.isdir(os.path.join(DOCS_DIR, "_templates")) else []
+templates_path = (
+    ["_templates"] if os.path.isdir(os.path.join(DOCS_DIR, "_templates")) else []
+)
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "furo"
-html_static_path = ["_static"] if os.path.isdir(os.path.join(DOCS_DIR, "_static")) else []
+html_static_path = (
+    ["_static"] if os.path.isdir(os.path.join(DOCS_DIR, "_static")) else []
+)

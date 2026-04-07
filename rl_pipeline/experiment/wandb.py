@@ -1,10 +1,11 @@
 from typing import Any, Generic, Literal, Sequence
 
-import wandb
 from pydantic import BaseModel
 from wandb.sdk.lib.paths import StrPath
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.wandb_settings import Settings
+
+import wandb
 from rl_pipeline.core import BaseExperimentManager, PipelineConfigType
 
 
