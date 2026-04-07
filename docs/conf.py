@@ -11,10 +11,10 @@ project = "rl-pipeline"
 author = "Mikihisa Yuasa"
 
 extensions = [
-	"sphinx.ext.autodoc",
-	"sphinx.ext.napoleon",
-	"sphinx.ext.autosummary",
-	"sphinx.ext.viewcode",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.viewcode",
 ]
 
 autosummary_generate = True
@@ -24,18 +24,18 @@ napoleon_numpy_docstring = True
 napoleon_google_docstring = False
 
 autodoc_default_options = {
-	"members": True,
-	"show-inheritance": True,
-	"member-order": "bysource",
+    "members": True,
+    "show-inheritance": True,
+    "member-order": "bysource",
 }
 
 autodoc_mock_imports = [
-	"gymnasium",
-	"numpy",
-	"optuna",
-	"stable_baselines3",
-	"torch",
-	"wandb",
+    "gymnasium",
+    "numpy",
+    "optuna",
+    "stable_baselines3",
+    "torch",
+    "wandb",
 ]
 
 templates_path = ["_templates"]
