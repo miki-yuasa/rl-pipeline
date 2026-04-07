@@ -1,86 +1,55 @@
 # rl-pipeline
-Experiment tools for streamlined RL experiment management
+Experiment tools for streamlined RL experiment management.
 
-## SB3 + Optuna Hyperparameter Tuning
+rl-pipeline provides reusable, configuration-driven components for reinforcement
+learning workflows. It is designed to make experiment orchestration,
+hyperparameter tuning, and evaluation easier to standardize and reproduce.
 
-The SB3 pipeline now supports Optuna optimization via `SB3Pipeline.optimize()`.
+## Main Features
 
-### Configure persistent study storage
+- Configuration-first SB3 training and evaluation pipelines.
+- Replicate pipeline support for multiple independent runs.
+- Optuna-powered hyperparameter optimization with pruning support.
+- Persistent study storage for resumable/distributed tuning.
+- Optional live monitoring with optuna-dashboard.
 
-Use a relational storage URL so studies are persisted and can be monitored live.
+## Integrations
 
-```yaml
-optuna_config:
-	storage_url: sqlite:///sb3_study.db
-	study_name: cartpole_ppo
-	direction: maximize
-	n_trials: 50
-	n_jobs: 1
-	n_startup_trials: 5
-	n_warmup_steps: 1
-	n_evaluations: 2
-	n_eval_episodes: 3
-	deterministic_eval: true
-	total_timesteps: 20000
-	dashboard:
-		launch: false
+- Stable-Baselines3 for RL algorithms and callbacks.
+- Optuna for automatic hyperparameter search.
+- optuna-dashboard for real-time study monitoring.
 
-	# Optional: declare exactly which params to tune
-	tune_params:
-		- name: learning_rate
-			suggest_type: float
-			low: 1e-5
-			high: 1e-2
-			log: true
-		- name: gamma_eps
-			suggest_type: float
-			low: 1e-4
-			high: 1e-1
-			log: true
-			one_minus: true
-			target: gamma
-		- name: exponent_n_steps
-			suggest_type: pow2_int
-			low: 3
-			high: 10
-			target: n_steps
-		- name: activation
-			suggest_type: categorical
-			choices: [tanh, relu]
-			target: policy_kwargs.activation_fn
-			value_mapping:
-				tanh: torch.nn.Tanh
-				relu: torch.nn.ReLU
-```
-
-### Run optimization
+## Quick Example
 
 ```python
 from rl_pipeline.sb3 import SB3Pipeline, SB3PipelineConfigReader
 
 config = SB3PipelineConfigReader.from_yaml("path/to/pipeline.yaml").to_config()
 pipeline = SB3Pipeline(config=config)
-study = pipeline.optimize()
 
-print(study.best_trial.value)
-print(study.best_trial.params)
+model = pipeline.train()
+eval_result = pipeline.evaluate(checkpoint="best")
 ```
 
-### Monitor with Optuna Dashboard
+## Documentation
 
-Manual launch:
+Detailed usage has been moved to Sphinx-ready docs.
 
-```bash
-optuna-dashboard sqlite:///sb3_study.db
-```
+- Overview: [docs/overview.rst](docs/overview.rst)
+- Integrations: [docs/integrations.rst](docs/integrations.rst)
+- SB3 + Optuna tuning guide: [docs/usage/optuna_tuning.rst](docs/usage/optuna_tuning.rst)
+- Citation: [docs/citation.rst](docs/citation.rst)
+- Documentation entry point: [docs/index.rst](docs/index.rst)
 
-Or enable dashboard subprocess launch in config:
+## Citation
 
-```yaml
-optuna_config:
-	storage_url: sqlite:///sb3_study.db
-	dashboard:
-		launch: true
-		host: 0.0.0.0
-		port: 8080
+If you use rl-pipeline in research, please cite it as software:
+
+```bibtex
+@software{yuasa_rl_pipeline,
+  title = {rl-pipeline},
+  author = {Yuasa, Mikihisa},
+  year = {2026},
+  url = {https://github.com/<owner>/rl-pipeline}
+}
 ```
