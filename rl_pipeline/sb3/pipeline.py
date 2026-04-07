@@ -1,3 +1,10 @@
+"""SB3 training and optimization pipelines.
+
+This module contains the single-run SB3 pipeline and replicate pipeline.
+It supports standard training/evaluation and Optuna-based hyperparameter
+optimization through ``SB3Pipeline.optimize``.
+"""
+
 import os
 import subprocess
 from copy import deepcopy
@@ -36,6 +43,22 @@ if TYPE_CHECKING:
 def init_callback(
     eval_env: VecEnv, video_env: Env | Wrapper, callback_config: SB3CallbackConfig
 ) -> list[BaseCallback]:
+    """Initialize the default callback list for SB3 training.
+
+    Parameters
+    ----------
+    eval_env : VecEnv
+        Evaluation environment used by evaluation callback.
+    video_env : Env | Wrapper
+        Single environment used by optional video recorder callback.
+    callback_config : SB3CallbackConfig
+        Callback configuration bundle.
+
+    Returns
+    -------
+    callbacks : list[BaseCallback]
+        Ordered callback list passed to ``model.learn``.
+    """
     ckpt_callback = CheckpointCallback(
         **callback_config.ckpt_callback_config.model_dump()
     )
@@ -62,6 +85,97 @@ def init_callback(
 class SB3Pipeline(
     BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader, SB3ExperimentManager],
 ):
+    """End-to-end SB3 pipeline for train/evaluate/replay/optimize workflows.
+
+    Parameters
+    ----------
+    config : SB3PipelineConfig
+        Runtime pipeline configuration.
+    verbose : bool, optional
+        Verbose logging flag, by default ``True``.
+
+    Examples
+    --------
+    Train and evaluate from an explicit config::
+
+        from stable_baselines3 import PPO
+
+        from rl_pipeline.core.config import SaveConfig
+        from rl_pipeline.gymnasium.config import MakeEnvConfig
+        from rl_pipeline.sb3 import (
+            CheckpointCallbackConfig,
+            EvalCallbackConfig,
+            MakeVecEnvConfig,
+            SB3AlgorithmConfig,
+            SB3CallbackConfig,
+            SB3LearnConfig,
+            SB3Pipeline,
+            SB3PipelineConfig,
+        )
+
+        config = SB3PipelineConfig(
+            device="cuda:0",
+            experiment_id="cartpole_explicit",
+            save_config=SaveConfig(
+                model_save_path="out/models/cartpole/final_model.zip",
+                best_model_save_path="out/models/cartpole/best_model.zip",
+                monitor_save_dir="out/models/cartpole/monitor",
+                tb_save_dir="out/models/cartpole/tb",
+                eval_save_dir="out/models/cartpole/eval",
+                eval_metrics_save_path="out/models/cartpole/eval/eval_metrics.yaml",
+                animation_save_path="out/models/cartpole/animations/final_model.gif",
+            ),
+            env_config=MakeEnvConfig(id="CartPole-v1", render_mode="rgb_array"),
+            vec_config=MakeVecEnvConfig(n_envs=4),
+            algo_config=SB3AlgorithmConfig(
+                algorithm=PPO,
+                algo_kwargs={"policy": "MlpPolicy", "n_steps": 128},
+            ),
+            learn_config=SB3LearnConfig(total_timesteps=10_000),
+            callback_config=SB3CallbackConfig(
+                eval_callback_config=EvalCallbackConfig(
+                    eval_freq=1_000,
+                    n_eval_episodes=5,
+                ),
+                ckpt_callback_config=CheckpointCallbackConfig(
+                    save_freq=1_000,
+                    save_path="out/models/cartpole/ckpts",
+                ),
+            ),
+        )
+        pipeline = SB3Pipeline(config=config, verbose=True)
+
+        model = pipeline.train()
+        eval_result = pipeline.evaluate(checkpoint="best")
+
+    Or load from YAML with a config reader::
+
+        config = SB3PipelineConfigReader.from_yaml("path/to/pipeline.yaml").to_config()
+
+    Run Optuna hyperparameter search::
+
+        from rl_pipeline.sb3 import SB3OptunaConfig
+
+        config.optuna_config = SB3OptunaConfig(
+            storage_url="sqlite:///sb3_study.db",
+            study_name="cartpole_optuna",
+            n_trials=20,
+            tune_params=[
+                {
+                    "name": "learning_rate",
+                    "suggest_type": "float",
+                    "low": 1e-5,
+                    "high": 1e-2,
+                    "log": True,
+                }
+            ],
+        )
+
+        pipeline = SB3Pipeline(config=config)
+        study = pipeline.optimize()
+        print(study.best_trial.value)
+    """
+
     def __init__(self, config: SB3PipelineConfig, verbose: bool = True):
         super().__init__(config, verbose=verbose)
 
@@ -85,6 +199,11 @@ class SB3Pipeline(
     def train(self) -> BaseAlgorithm:
         """
         Train the model using the provided training configuration.
+
+        Returns
+        -------
+        model : BaseAlgorithm
+            Trained SB3 model instance.
         """
 
         self._manager_start_run()
@@ -111,6 +230,13 @@ class SB3Pipeline(
         return model
 
     def _init_callback(self) -> list[BaseCallback]:
+        """Build callback list for training.
+
+        Returns
+        -------
+        callbacks : list[BaseCallback]
+            Ordered callback instances.
+        """
         return init_callback(
             eval_env=self.env_loader.vec_env(),
             video_env=self.env_loader.env(),
@@ -118,6 +244,7 @@ class SB3Pipeline(
         )
 
     def _manager_start_run(self):
+        """Start experiment manager run if configured."""
         if self.experiment_manager and self.config.experiment_manager_config:
             manager_config: dict[str, Any] = (
                 self.config.experiment_manager_config.manager_config
@@ -137,6 +264,18 @@ class SB3Pipeline(
             pass
 
     def _manager_add_callback(self, callbacks: list[BaseCallback]):
+        """Append experiment-manager callback when available.
+
+        Parameters
+        ----------
+        callbacks : list[BaseCallback]
+            Existing callback list.
+
+        Returns
+        -------
+        callbacks : list[BaseCallback]
+            Callback list with optional manager callback appended.
+        """
         if self.experiment_manager and self.config.experiment_manager_config:
             callback = self.experiment_manager.logger_callback(
                 self.config.experiment_manager_config.callback_config
@@ -148,6 +287,7 @@ class SB3Pipeline(
         return callbacks
 
     def _manager_end_run(self):
+        """End experiment manager run if active."""
         if self.experiment_manager:
             self.experiment_manager.end_run()
         else:
@@ -157,6 +297,11 @@ class SB3Pipeline(
         """
         Train the model on an unsaved model.
         This method is a placeholder and should be implemented if needed.
+
+        Returns
+        -------
+        model : BaseAlgorithm
+            Newly trained model or previously saved model loaded from disk.
         """
         demo_env = self.env_loader.env()
         if (
@@ -179,6 +324,22 @@ class SB3Pipeline(
         env: Env | Wrapper | None = None,
         device: str | None = None,
     ) -> BaseAlgorithm:
+        """Load a model checkpoint or saved model artifact.
+
+        Parameters
+        ----------
+        ckpt_timestep : int | Literal["latest", "final", "best"], optional
+            Which checkpoint/model to load, by default ``"final"``.
+        env : Env | Wrapper | None, optional
+            Optional environment to bind to the loaded model.
+        device : str | None, optional
+            Device override for model loading.
+
+        Returns
+        -------
+        model : BaseAlgorithm
+            Loaded SB3 model.
+        """
         if device is None:
             device = self.config.device
 
@@ -216,7 +377,28 @@ class SB3Pipeline(
         | PolicyPredictor = "final",
         env: Literal["single", "vec"] | Env = "vec",
     ) -> PolicyEvalStats:
-        """Evaluate the final model."""
+        """Evaluate a model or checkpoint and optionally persist metrics.
+
+        Parameters
+        ----------
+        n_eval_episodes : int, optional
+            Number of evaluation episodes, by default 100.
+        deterministic : bool, optional
+            Whether to use deterministic actions, by default ``False``.
+        save_to_file : bool, optional
+            Whether to save evaluation metrics, by default ``True``.
+        eval_file_name : str, optional
+            Output file name for metrics, by default ``"model_eval.yaml"``.
+        checkpoint : int | Literal["latest", "final", "best"] | PolicyPredictor, optional
+            Checkpoint identifier or model instance to evaluate.
+        env : Literal["single", "vec"] | Env, optional
+            Evaluation environment selector or explicit env object.
+
+        Returns
+        -------
+        eval_result : PolicyEvalStats
+            Structured evaluation metrics.
+        """
 
         if self.verbose:
             print(f"SB3Pipeline: Evaluating the {checkpoint} model...")
@@ -290,6 +472,17 @@ class SB3Pipeline(
     ) -> None:
         """
         Record a replay of the model's performance in the evaluation environment.
+
+        Parameters
+        ----------
+        model : BaseAlgorithm
+            Model to run during replay recording.
+        save_path : str | None, optional
+            Optional output path; defaults to config animation path.
+        custom_player : Callable[[Env, BaseAlgorithm, str, bool], None] | None, optional
+            Optional replay recorder implementation.
+        verbose : bool, optional
+            Verbose flag for replay recorder.
         """
         if save_path is None:
             save_path = self.save_config.animation_save_path
@@ -301,6 +494,24 @@ class SB3Pipeline(
         self,
         optuna_config: SB3OptunaConfig | None = None,
     ) -> "optuna.Study":
+        """Run Optuna hyperparameter optimization for this pipeline.
+
+        Parameters
+        ----------
+        optuna_config : SB3OptunaConfig | None, optional
+            Optional override for optimization configuration. When ``None``,
+            ``self.optuna_config`` is used.
+
+        Returns
+        -------
+        study : optuna.Study
+            Optimized Optuna study object.
+
+        Raises
+        ------
+        ValueError
+            If Optuna config or required storage/sampler settings are missing.
+        """
         import optuna
 
         from rl_pipeline.experiment.optuna import (
@@ -392,6 +603,18 @@ class SB3Pipeline(
         eval_freq = max(total_timesteps // tune_config.n_evaluations // n_envs, 1)
 
         def objective(trial: optuna.Trial) -> float:
+            """Objective function executed by Optuna for one trial.
+
+            Parameters
+            ----------
+            trial : optuna.Trial
+                Trial object used for parameter sampling and pruning.
+
+            Returns
+            -------
+            objective_value : float
+                Final objective score (mean reward) for the trial.
+            """
             train_env: VecEnv | None = None
             eval_env = None
             model: BaseAlgorithm | None = None
@@ -466,6 +689,34 @@ class SB3Pipeline(
 
 
 class SB3ReplicatePipeline:
+    """Execute multiple independent SB3 pipelines using replicate configs.
+
+    Parameters
+    ----------
+    config : SB3ReplicatePipelineConfig
+        Replicate pipeline configuration with per-run configs.
+    verbose : bool, optional
+        Verbose logging flag, by default ``True``.
+
+    Examples
+    --------
+    Train and evaluate multiple independent runs::
+
+        from rl_pipeline.sb3 import (
+            SB3ReplicatePipeline,
+            SB3ReplicatePipelineConfigReader,
+        )
+
+        rep_config = SB3ReplicatePipelineConfigReader.from_yaml(
+            "path/to/replicate_pipeline.yaml"
+        ).to_config()
+        rep_pipeline = SB3ReplicatePipeline(config=rep_config, verbose=True)
+
+        models = rep_pipeline.train()
+        eval_results = rep_pipeline.evaluate(checkpoint="best")
+        print(len(models), len(eval_results))
+    """
+
     def __init__(self, config: SB3ReplicatePipelineConfig, verbose: bool = True):
         self.replicate_config = config.replicate_config
         self.ind_pipeline_configs = config.ind_pipeline_configs
@@ -476,6 +727,13 @@ class SB3ReplicatePipeline:
         self.verbose = verbose
 
     def train(self) -> list[BaseAlgorithm]:
+        """Train all replicate pipelines.
+
+        Returns
+        -------
+        models : list[BaseAlgorithm]
+            Trained models, one per replicate.
+        """
         models: list[BaseAlgorithm] = []
         for ind_pipeline in self.ind_pipelines:
             model = ind_pipeline.train()
@@ -484,6 +742,13 @@ class SB3ReplicatePipeline:
         return models
 
     def train_on_unsaved_model(self):
+        """Train or load each replicate pipeline model.
+
+        Returns
+        -------
+        models : list[BaseAlgorithm]
+            Models for all replicate pipelines.
+        """
         models: list[BaseAlgorithm] = []
         for ind_pipeline in self.ind_pipelines:
             model = ind_pipeline.train_on_unsaved_model()
@@ -499,6 +764,13 @@ class SB3ReplicatePipeline:
         eval_file_name: str = "model_eval.yaml",
         checkpoint: int | Literal["latest", "final", "best"] | BaseAlgorithm = "final",
     ) -> list[PolicyEvalStats]:
+        """Evaluate all replicate pipelines.
+
+        Returns
+        -------
+        eval_results : list[PolicyEvalStats]
+            Evaluation stats for all replicate runs.
+        """
         eval_results = []
         for ind_pipeline in self.ind_pipelines:
             result = ind_pipeline.evaluate(
@@ -517,6 +789,13 @@ class SB3ReplicatePipeline:
         env: Env | Wrapper | None = None,
         device: str | None = None,
     ) -> list[BaseAlgorithm]:
+        """Load models for all replicate pipelines.
+
+        Returns
+        -------
+        models : list[BaseAlgorithm]
+            Loaded models for each replicate.
+        """
         models = []
         for ind_pipeline in self.ind_pipelines:
             model = ind_pipeline.load_model(
@@ -533,6 +812,15 @@ class SB3ReplicatePipeline:
     ) -> None:
         """
         Record a replay of the model's performance in the evaluation environment.
+
+        Parameters
+        ----------
+        models : list[BaseAlgorithm]
+            Models corresponding to replicate pipelines.
+        custom_player : Callable[[Env, BaseAlgorithm, str, bool], None] | None, optional
+            Optional replay recorder implementation.
+        verbose : bool, optional
+            Verbose flag for replay recorder.
         """
         assert len(models) == len(self.ind_pipelines)
 
