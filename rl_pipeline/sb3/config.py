@@ -345,7 +345,7 @@ class SB3OptunaConfig(BaseModel):
     n_warmup_steps: int = Field(ge=0, default=0)
     n_evaluations: int = Field(ge=1, default=2)
     n_eval_episodes: int = Field(ge=1, default=3)
-    deterministic_eval: bool = True
+    deterministic_eval: bool = False
     total_timesteps: int | None = Field(default=None, ge=1)
     sample_params_fn: Callable[[Any], dict[str, Any]] | None = None
     tune_params: list[SB3OptunaParamConfig] = Field(default_factory=list)
