@@ -312,6 +312,7 @@ class TrialEvalCallback(EvalCallback):
         trial: "optuna.Trial",
         n_eval_episodes: int = 5,
         eval_freq: int = 10_000,
+        best_model_save_path: str | None = None,
         deterministic: bool = True,
         verbose: int = 0,
     ):
@@ -319,6 +320,7 @@ class TrialEvalCallback(EvalCallback):
             eval_env=eval_env,
             n_eval_episodes=n_eval_episodes,
             eval_freq=eval_freq,
+            best_model_save_path=best_model_save_path,
             deterministic=deterministic,
             verbose=verbose,
         )

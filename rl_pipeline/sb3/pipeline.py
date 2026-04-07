@@ -536,17 +536,6 @@ class SB3Pipeline(
                 "optuna_config.storage_url is required for persistent studies and optuna-dashboard."
             )
 
-        if tune_config.dashboard.launch:
-            if (
-                self.optuna_dashboard_process is None
-                or self.optuna_dashboard_process.poll() is not None
-            ):
-                self.optuna_dashboard_process = launch_dashboard(
-                    storage_url=tune_config.storage_url,
-                    host=tune_config.dashboard.host,
-                    port=tune_config.dashboard.port,
-                )
-
         dashboard_command = build_dashboard_command(
             storage_url=tune_config.storage_url,
             host=tune_config.dashboard.host,
@@ -565,6 +554,17 @@ class SB3Pipeline(
             n_startup_trials=tune_config.n_startup_trials,
             n_warmup_steps=tune_config.n_warmup_steps,
         )
+
+        if tune_config.dashboard.launch:
+            if (
+                self.optuna_dashboard_process is None
+                or self.optuna_dashboard_process.poll() is not None
+            ):
+                self.optuna_dashboard_process = launch_dashboard(
+                    storage_url=tune_config.storage_url,
+                    host=tune_config.dashboard.host,
+                    port=tune_config.dashboard.port,
+                )
 
         if tune_config.tune_params:
 
@@ -619,6 +619,14 @@ class SB3Pipeline(
             eval_env = None
             model: BaseAlgorithm | None = None
             nan_encountered = False
+            trial_artifact_dir = os.path.join(
+                self.save_config.model_save_dir,
+                "optuna_trials",
+                f"trial_{trial.number}",
+            )
+            os.makedirs(trial_artifact_dir, exist_ok=True)
+            best_model_path = os.path.join(trial_artifact_dir, "best_model.zip")
+            final_model_path = os.path.join(trial_artifact_dir, "final_model.zip")
 
             try:
                 sampled_algo_kwargs = trial_sampler(trial)
@@ -641,6 +649,7 @@ class SB3Pipeline(
                     trial=trial,
                     n_eval_episodes=tune_config.n_eval_episodes,
                     eval_freq=eval_freq,
+                    best_model_save_path=trial_artifact_dir,
                     deterministic=tune_config.deterministic_eval,
                     verbose=0,
                 )
@@ -663,6 +672,11 @@ class SB3Pipeline(
 
                 if nan_encountered:
                     return float("nan")
+
+                model.save(os.path.join(trial_artifact_dir, "final_model"))
+                trial.set_user_attr("artifact_dir", trial_artifact_dir)
+                trial.set_user_attr("best_model_path", best_model_path)
+                trial.set_user_attr("final_model_path", final_model_path)
 
                 if eval_callback.is_pruned:
                     raise optuna.exceptions.TrialPruned()

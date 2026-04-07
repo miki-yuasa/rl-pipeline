@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import optuna
 import torch.nn as nn
@@ -131,3 +132,121 @@ def test_sb3_pipeline_optimize_smoke(tmp_path: Path):
     assert len(study.trials) == 1
     assert study.study_name == "sb3_smoke_optuna"
     assert db_path.exists()
+
+
+def test_sb3_pipeline_optimize_initializes_study_before_dashboard(monkeypatch):
+    config = SB3PipelineConfigReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    ).to_config()
+
+    assert config.vec_config is not None
+    config.vec_config.vec_env_cls = DummyVecEnv
+    config.vec_config.n_envs = 1
+    config.optuna_config = SB3OptunaConfig(
+        storage_url="sqlite:///study_order_test.db",
+        n_trials=1,
+        dashboard=SB3OptunaDashboardConfig(launch=True),
+        tune_params=[],
+        sample_params_fn=lambda trial: {},
+    )
+
+    pipeline = SB3Pipeline(config=config, verbose=False)
+
+    call_order: list[str] = []
+
+    class DummyStudy:
+        def optimize(self, *args, **kwargs):
+            return None
+
+    fake_study = DummyStudy()
+
+    def fake_create_study(*args, **kwargs):
+        call_order.append("create_study")
+        return fake_study
+
+    def fake_launch_dashboard(*args, **kwargs):
+        call_order.append("launch_dashboard")
+        return SimpleNamespace(poll=lambda: None)
+
+    monkeypatch.setattr("rl_pipeline.experiment.optuna.create_study", fake_create_study)
+    monkeypatch.setattr(
+        "rl_pipeline.experiment.optuna.launch_dashboard", fake_launch_dashboard
+    )
+
+    study = pipeline.optimize()
+
+    assert call_order == ["create_study", "launch_dashboard"]
+    assert study is fake_study
+
+
+def test_sb3_pipeline_optimize_saves_trial_model_artifacts(monkeypatch, tmp_path: Path):
+    config = SB3PipelineConfigReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    ).to_config()
+
+    assert config.vec_config is not None
+    config.vec_config.vec_env_cls = DummyVecEnv
+    config.vec_config.n_envs = 1
+
+    model_dir = tmp_path / "models"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    config.save_config.model_save_path = str(model_dir / "final_model.zip")
+
+    class DummyAlgorithm:
+        def __init__(self, env=None, tensorboard_log=None, device=None, **kwargs):
+            self.env = env
+
+        def learn(self, *args, **kwargs):
+            return None
+
+        def save(self, path: str):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(f"{path}.zip").write_text("dummy")
+
+    config.algo_config.algorithm = DummyAlgorithm  # type: ignore[assignment]
+    config.optuna_config = SB3OptunaConfig(
+        storage_url=f"sqlite:///{tmp_path / 'artifact_test.db'}",
+        n_trials=1,
+        n_jobs=1,
+        n_startup_trials=0,
+        n_warmup_steps=0,
+        n_evaluations=1,
+        n_eval_episodes=1,
+        total_timesteps=1,
+        tune_params=[],
+        sample_params_fn=lambda trial: {},
+        dashboard=SB3OptunaDashboardConfig(launch=False),
+    )
+
+    pipeline = SB3Pipeline(config=config, verbose=False)
+
+    trial_best_dirs: list[str | None] = []
+
+    class FakeTrialEvalCallback:
+        def __init__(
+            self,
+            eval_env,
+            trial,
+            n_eval_episodes,
+            eval_freq,
+            best_model_save_path,
+            deterministic,
+            verbose,
+        ):
+            trial_best_dirs.append(best_model_save_path)
+            self.is_pruned = False
+            self.last_mean_reward = 1.0
+
+    monkeypatch.setattr("rl_pipeline.sb3.pipeline.TrialEvalCallback", FakeTrialEvalCallback)
+
+    study = pipeline.optimize()
+    trial = study.trials[0]
+
+    expected_dir = Path(config.save_config.model_save_dir) / "optuna_trials" / "trial_0"
+    assert trial_best_dirs == [str(expected_dir)]
+    assert trial.user_attrs["artifact_dir"] == str(expected_dir)
+    assert trial.user_attrs["best_model_path"] == str(expected_dir / "best_model.zip")
+    assert trial.user_attrs["final_model_path"] == str(
+        expected_dir / "final_model.zip"
+    )
+    assert (expected_dir / "final_model.zip").exists()
