@@ -1,3 +1,4 @@
+import os
 from typing import Any, Generic, Literal, Sequence
 
 from pydantic import BaseModel
@@ -215,6 +216,10 @@ class WandbInitConfig(BaseModel):
     sync_tensorboard: bool | None = None
     monitor_gym: bool | None = None
     settings: Settings | dict[str, Any] | None = None
+
+
+# Resolve forward refs used by wandb path aliases (e.g., os.PathLike) for autodoc builds.
+WandbInitConfig.model_rebuild(_types_namespace={"os": os})
 
 
 class WandbExperimentManager(

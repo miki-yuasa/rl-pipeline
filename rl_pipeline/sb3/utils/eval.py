@@ -13,7 +13,7 @@ class SuccessBufferEval(BaseModel):
 
 class SuccessBuffer:
     """
-    A buffer to store success/failure rates for evaluation to be used for SB3 `evaluate_policy` function.
+    Buffer for success/failure metrics from SB3 ``evaluate_policy``.
 
     Usage
     -----
@@ -22,16 +22,16 @@ class SuccessBuffer:
 
     Example
     -------
-    ```python
-    success_buffer = SuccessBuffer()
+    .. code-block:: python
 
-    episode_rewards, episode_lengths = evaluate_policy(
+        success_buffer = SuccessBuffer()
+
+        episode_rewards, episode_lengths = evaluate_policy(
             model,
             return_episode_rewards=True,
             callback=success_buffer._log_success_callback,
-    )
-    success_buffer_result: SuccessBufferEval = success_buffer.post_eval()
-    ```
+        )
+        success_buffer_result: SuccessBufferEval = success_buffer.post_eval()
     """
 
     def __init__(self):
@@ -65,20 +65,17 @@ class SuccessBuffer:
 
     def post_eval(self) -> SuccessBufferEval:
         """
-        Return the success rate and reset the buffer.
+        Return evaluation success/failure metrics and reset the buffer.
 
         Returns
         -------
-        result: SuccessBufferEval
-            The evaluation results containing the following fields:
-            -  episode_successes: list[bool]
-                -- A list of success rates for each episode.
-            -  success_rate: float | None
-                -- The mean success rate, or None if no success rates were logged.
-            -  episode_failures: list[bool]
-                -- A list of failure rates for each episode.
-            -  failure_rate: float | None
-                -- The mean failure rate, or None if no failure rates were logged.
+        result : SuccessBufferEval
+            Evaluation results with:
+
+            - ``episode_successes``: Per-episode success flags.
+            - ``success_rate``: Mean success rate, or ``None`` when unavailable.
+            - ``episode_failures``: Per-episode failure flags.
+            - ``failure_rate``: Mean failure rate, or ``None`` when unavailable.
         """
         episode_successes: list[bool] = []
         episode_failures: list[bool] = []

@@ -1,13 +1,6 @@
 core package
 ============
 
-core.__init__
--------------
-
-.. automodule:: rl_pipeline.core
-   :members:
-   :show-inheritance:
-
 core.config
 -----------
 

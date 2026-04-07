@@ -1,13 +1,6 @@
 sb3 package
 ===========
 
-sb3.__init__
-------------
-
-.. automodule:: rl_pipeline.sb3
-   :members:
-   :show-inheritance:
-
 sb3.callback
 ------------
 

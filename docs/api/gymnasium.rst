@@ -1,13 +1,6 @@
 gymnasium package
 =================
 
-gymnasium.__init__
-------------------
-
-.. automodule:: rl_pipeline.gymnasium
-   :members:
-   :show-inheritance:
-
 gymnasium.config
 ----------------
 
