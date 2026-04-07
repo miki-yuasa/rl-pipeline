@@ -14,35 +14,8 @@ from rl_pipeline.sb3 import (
 from rl_pipeline.sb3.config import SB3OptunaParamConfig
 from rl_pipeline.sb3.experiment.optuna import (
     filter_algorithm_kwargs,
-    sample_params,
     sample_params_from_config,
 )
-
-
-def test_sample_params_transforms_and_mappings():
-    trial = optuna.trial.FixedTrial(
-        {
-            "gamma": 0.01,
-            "gae_lambda": 0.1,
-            "learning_rate": 3e-4,
-            "ent_coef": 1e-3,
-            "max_grad_norm": 0.5,
-            "exponent_n_steps": 5,
-            "exponent_batch_size": 10,
-            "net_arch": "small",
-            "activation_fn": "relu",
-            "ortho_init": True,
-        }
-    )
-
-    params = sample_params(trial)
-
-    assert params["n_steps"] == 32
-    assert params["batch_size"] == 32
-    assert params["gamma"] == 0.99
-    assert params["gae_lambda"] == 0.9
-    assert params["policy_kwargs"]["activation_fn"] is nn.ReLU
-    assert params["policy_kwargs"]["ortho_init"] is True
 
 
 def test_filter_algorithm_kwargs_drops_unknown_values():
@@ -140,6 +113,15 @@ def test_sb3_pipeline_optimize_smoke(tmp_path: Path):
         n_evaluations=1,
         n_eval_episodes=1,
         total_timesteps=64,
+        tune_params=[
+            SB3OptunaParamConfig(
+                name="learning_rate",
+                suggest_type="float",
+                low=1e-5,
+                high=1e-2,
+                log=True,
+            )
+        ],
         dashboard=SB3OptunaDashboardConfig(launch=False),
     )
 

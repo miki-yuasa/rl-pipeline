@@ -311,7 +311,6 @@ class SB3Pipeline(
 
         from .experiment.optuna import (
             filter_algorithm_kwargs,
-            sample_params,
             sample_params_from_config,
         )
 
@@ -376,7 +375,10 @@ class SB3Pipeline(
             trial_sampler = _trial_sampler_from_callable
 
         else:
-            trial_sampler = sample_params
+            raise ValueError(
+                "Optuna tuning requires either optuna_config.tune_params "
+                "or optuna_config.sample_params_fn."
+            )
 
         algo_class = self.config.algo_config.algorithm
         base_algo_kwargs = deepcopy(self.config.algo_config.algo_kwargs)

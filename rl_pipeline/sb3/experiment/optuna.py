@@ -2,59 +2,10 @@ import inspect
 from typing import TYPE_CHECKING, Any
 
 import optuna
-import torch.nn as nn
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 if TYPE_CHECKING:
     from ..config import SB3OptunaParamConfig
-
-
-def sample_params(trial: optuna.trial.BaseTrial) -> dict[str, Any]:
-    """Default hyperparameter sampler for SB3 algorithms."""
-    gamma = 1.0 - trial.suggest_float("gamma", 0.0001, 0.1, log=True)
-    gae_lambda = 1.0 - trial.suggest_float("gae_lambda", 0.001, 0.2, log=True)
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    ent_coef = trial.suggest_float("ent_coef", 1e-8, 1e-1, log=True)
-    max_grad_norm = trial.suggest_float("max_grad_norm", 0.3, 5.0, log=True)
-
-    exponent_n_steps = trial.suggest_int("exponent_n_steps", 3, 10)
-    n_steps = 2**exponent_n_steps
-
-    exponent_batch_size = trial.suggest_int("exponent_batch_size", 3, 10)
-    batch_size = min(2**exponent_batch_size, n_steps)
-
-    net_arch_key = trial.suggest_categorical("net_arch", ["tiny", "small", "medium"])
-    activation_key = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
-    ortho_init = trial.suggest_categorical("ortho_init", [False, True])
-
-    net_arch_map: dict[str, dict[str, list[int]]] = {
-        "tiny": {"pi": [64], "vf": [64]},
-        "small": {"pi": [64, 64], "vf": [64, 64]},
-        "medium": {"pi": [256, 256], "vf": [256, 256]},
-    }
-    activation_map: dict[str, type[nn.Module]] = {
-        "tanh": nn.Tanh,
-        "relu": nn.ReLU,
-    }
-
-    trial.set_user_attr("gamma_", gamma)
-    trial.set_user_attr("gae_lambda_", gae_lambda)
-    trial.set_user_attr("n_steps", n_steps)
-
-    return {
-        "n_steps": n_steps,
-        "batch_size": batch_size,
-        "gamma": gamma,
-        "gae_lambda": gae_lambda,
-        "learning_rate": learning_rate,
-        "ent_coef": ent_coef,
-        "max_grad_norm": max_grad_norm,
-        "policy_kwargs": {
-            "net_arch": net_arch_map[net_arch_key],
-            "activation_fn": activation_map[activation_key],
-            "ortho_init": ortho_init,
-        },
-    }
 
 
 def filter_algorithm_kwargs(

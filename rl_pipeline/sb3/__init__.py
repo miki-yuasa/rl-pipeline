@@ -42,7 +42,6 @@ from .experiment import (
     SB3WandbCallbackConfig,
     SB3WandbExperimentManager,
     filter_algorithm_kwargs,
-    sample_params,
     sample_params_from_config,
 )
 from .loader import SB3EnvLoader, SB3ModelLoader
@@ -91,7 +90,6 @@ __all__ = [
     "VideoRecorderCallbackConfigReader",
     "SB3ExperimentManagerConfigReader",
     "SB3ReplicatePipelineConfigReader",
-    "sample_params",
     "sample_params_from_config",
     "filter_algorithm_kwargs",
 ]
