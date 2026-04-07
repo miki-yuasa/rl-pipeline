@@ -1,5 +1,5 @@
 rl-pipeline documentation
-========================
+=========================
 
 rl-pipeline provides reusable building blocks for reinforcement learning
 training workflows, with first-class support for Stable-Baselines3 pipelines

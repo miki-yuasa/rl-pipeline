@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from wandb.sdk.lib.paths import StrPath
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.wandb_settings import Settings
-
 from rl_pipeline.core import BaseExperimentManager, PipelineConfigType
 
 
