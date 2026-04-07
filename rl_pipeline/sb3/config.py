@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -93,6 +93,53 @@ class SB3ExperimentManagerConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class SB3OptunaDashboardConfig(BaseModel):
+    launch: bool = False
+    host: str | None = None
+    port: int | None = Field(default=None, ge=1)
+
+
+class SB3OptunaParamConfig(BaseModel):
+    name: str
+    suggest_type: Literal["float", "int", "categorical", "pow2_int"]
+    target: str | None = None
+    low: float | int | None = None
+    high: float | int | None = None
+    step: float | int | None = None
+    log: bool = False
+    choices: list[Any] | None = None
+    one_minus: bool = False
+    value_mapping: dict[str, Any] | None = None
+
+
+class SB3OptunaConfig(BaseModel):
+    storage_url: str | None = None
+    study_name: str | None = None
+    direction: Literal["maximize", "minimize"] = "maximize"
+    n_trials: int = Field(ge=1, default=50)
+    timeout: int | None = Field(default=None, ge=1)
+    n_jobs: int = Field(ge=1, default=1)
+    n_startup_trials: int = Field(ge=0, default=5)
+    n_warmup_steps: int = Field(ge=0, default=0)
+    n_evaluations: int = Field(ge=1, default=2)
+    n_eval_episodes: int = Field(ge=1, default=3)
+    deterministic_eval: bool = True
+    total_timesteps: int | None = Field(default=None, ge=1)
+    sample_params_fn: Callable[[Any], dict[str, Any]] | None = None
+    tune_params: list[SB3OptunaParamConfig] = Field(default_factory=list)
+    dashboard: SB3OptunaDashboardConfig = SB3OptunaDashboardConfig()
+
+    @field_serializer("sample_params_fn", when_used="json")
+    def serialize_sample_params_fn(
+        self, sample_params_fn: Callable[[Any], dict[str, Any]] | None
+    ) -> str | None:
+        if sample_params_fn is None:
+            return None
+        return f"{sample_params_fn.__module__}.{sample_params_fn.__name__}"
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 class SB3PipelineConfig(BaseModel):
     device: str = "cuda:0"
     experiment_id: str = ""
@@ -105,6 +152,7 @@ class SB3PipelineConfig(BaseModel):
     learn_config: SB3LearnConfig
     callback_config: SB3CallbackConfig
     experiment_manager_config: SB3ExperimentManagerConfig | None = None
+    optuna_config: SB3OptunaConfig | None = None
 
 
 class SB3ModelConfig(BaseModel):

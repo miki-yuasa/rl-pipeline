@@ -85,5 +85,6 @@
       "entity": "miki-yuasa-university-of-illinois-urbana-champaign"
     },
     "callback_config": { "gradient_save_freq": 50 }
-  }
+  },
+  "optuna_config": null
 }

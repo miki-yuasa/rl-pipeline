@@ -1,6 +1,6 @@
 import importlib.util
 import os
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -38,6 +38,9 @@ from .config import (
     SB3ExperimentManagerConfig,
     SB3LearnConfig,
     SB3ModelConfig,
+    SB3OptunaConfig,
+    SB3OptunaDashboardConfig,
+    SB3OptunaParamConfig,
     SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
 )
@@ -246,6 +249,102 @@ class SB3ExperimentManagerConfigReader(
         )
 
 
+class SB3OptunaDashboardConfigReader(BaseModel, YAMLReaderMixin):
+    launch: bool = False
+    host: str | None = None
+    port: int | None = Field(default=None, ge=1)
+
+    def to_config(self) -> SB3OptunaDashboardConfig:
+        return SB3OptunaDashboardConfig(
+            launch=self.launch,
+            host=self.host,
+            port=self.port,
+        )
+
+
+class SB3OptunaParamConfigReader(BaseModel, YAMLReaderMixin):
+    name: str
+    suggest_type: Literal["float", "int", "categorical", "pow2_int"]
+    target: str | None = None
+    low: float | int | None = None
+    high: float | int | None = None
+    step: float | int | None = None
+    log: bool = False
+    choices: list[Any] | None = None
+    one_minus: bool = False
+    value_mapping: dict[str, Any] | None = None
+
+    def to_config(self) -> SB3OptunaParamConfig:
+        resolved_value_mapping: dict[str, Any] | None = None
+        if self.value_mapping is not None:
+            resolved_value_mapping = {}
+            for key, value in self.value_mapping.items():
+                if isinstance(value, str) and "." in value:
+                    try:
+                        resolved_value_mapping[key] = get_class(value)
+                    except (AttributeError, ImportError, ModuleNotFoundError):
+                        resolved_value_mapping[key] = value
+                else:
+                    resolved_value_mapping[key] = value
+
+        return SB3OptunaParamConfig(
+            name=self.name,
+            suggest_type=self.suggest_type,
+            target=self.target,
+            low=self.low,
+            high=self.high,
+            step=self.step,
+            log=self.log,
+            choices=self.choices,
+            one_minus=self.one_minus,
+            value_mapping=resolved_value_mapping,
+        )
+
+
+class SB3OptunaConfigReader(BaseModel, YAMLReaderMixin):
+    storage_url: str | None = None
+    study_name: str | None = None
+    direction: Literal["maximize", "minimize"] = "maximize"
+    n_trials: int = Field(ge=1, default=50)
+    timeout: int | None = Field(default=None, ge=1)
+    n_jobs: int = Field(ge=1, default=1)
+    n_startup_trials: int = Field(ge=0, default=5)
+    n_warmup_steps: int = Field(ge=0, default=0)
+    n_evaluations: int = Field(ge=1, default=2)
+    n_eval_episodes: int = Field(ge=1, default=3)
+    deterministic_eval: bool = True
+    total_timesteps: int | None = Field(default=None, ge=1)
+    sample_params_fn: str | None = None
+    tune_params: list[SB3OptunaParamConfigReader] = Field(default_factory=list)
+    dashboard: SB3OptunaDashboardConfigReader = SB3OptunaDashboardConfigReader()
+
+    def to_config(self) -> SB3OptunaConfig:
+        sample_params_fn = None
+        if self.sample_params_fn is not None:
+            sample_params_fn = get_class(self.sample_params_fn)
+            assert callable(sample_params_fn), (
+                f"sample_params_fn must be callable: {self.sample_params_fn}"
+            )
+
+        return SB3OptunaConfig(
+            storage_url=self.storage_url,
+            study_name=self.study_name,
+            direction=self.direction,
+            n_trials=self.n_trials,
+            timeout=self.timeout,
+            n_jobs=self.n_jobs,
+            n_startup_trials=self.n_startup_trials,
+            n_warmup_steps=self.n_warmup_steps,
+            n_evaluations=self.n_evaluations,
+            n_eval_episodes=self.n_eval_episodes,
+            deterministic_eval=self.deterministic_eval,
+            total_timesteps=self.total_timesteps,
+            sample_params_fn=sample_params_fn,
+            tune_params=[param.to_config() for param in self.tune_params],
+            dashboard=self.dashboard.to_config(),
+        )
+
+
 class SB3ModelConfigReader(BaseModel, YAMLReaderMixin):
     """Configuration reader for SB3 model."""
 
@@ -279,6 +378,7 @@ class SB3PipelineConfigReader(
     wrapper_config_file: str | None = None
     model_config_file: str = "model_config.yaml"
     experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
+    optuna_config: SB3OptunaConfigReader | None = None
 
     def to_config(self) -> SB3PipelineConfig:
         device: str = (
@@ -305,6 +405,10 @@ class SB3PipelineConfigReader(
             self._to_manager_config()
         )
 
+        optuna_config: SB3OptunaConfig | None = (
+            self.optuna_config.to_config() if self.optuna_config else None
+        )
+
         pipeline_config = SB3PipelineConfig(
             device=device,
             experiment_id=self.experiment_id,
@@ -317,6 +421,7 @@ class SB3PipelineConfigReader(
             learn_config=learn_config,
             callback_config=callback_config,
             experiment_manager_config=experiment_manager_config,
+            optuna_config=optuna_config,
         )
 
         return pipeline_config

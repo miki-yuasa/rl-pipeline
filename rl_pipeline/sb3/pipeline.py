@@ -1,11 +1,14 @@
 import os
-from typing import Any, Callable, Literal
+import subprocess
+from copy import deepcopy
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import numpy as np
 from gymnasium import Env, Wrapper
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.type_aliases import PolicyPredictor
 from stable_baselines3.common.vec_env import VecEnv
 
@@ -14,16 +17,20 @@ from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .callback import SuccessEvalCallback, VideoRecorderCallback
+from .callback import SuccessEvalCallback, TrialEvalCallback, VideoRecorderCallback
 from .config import (
     SB3CallbackConfig,
     SB3LearnConfig,
+    SB3OptunaConfig,
     SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
 )
 from .experiment import SB3ExperimentManager
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
+
+if TYPE_CHECKING:
+    import optuna
 
 
 def init_callback(
@@ -61,6 +68,8 @@ class SB3Pipeline(
         self.save_config: SaveConfig = config.save_config
         self.learn_config: SB3LearnConfig = config.learn_config
         self.callback_configs: SB3CallbackConfig = config.callback_config
+        self.optuna_config: SB3OptunaConfig | None = config.optuna_config
+        self.optuna_dashboard_process: subprocess.Popen[str] | None = None
 
         self.env_loader = SB3EnvLoader(
             config.env_config, config.wrapper_config, config.vec_config
@@ -116,9 +125,9 @@ class SB3Pipeline(
             manager_config.update(
                 {
                     "id": self.unique_id(),
-                    "name": manager_config["name"] + f"_{self.exp_time}"
+                    "name": manager_config["name"] + f"_{self.exp_time()}"
                     if manager_config.get("name")
-                    else f"run_{self.exp_time}",
+                    else f"run_{self.exp_time()}",
                 }
             )
             self.experiment_manager.start_run(
@@ -287,6 +296,169 @@ class SB3Pipeline(
 
         player = custom_player if custom_player is not None else record_replay
         player(self.env_loader.env(), model, save_path, self.verbose or verbose)
+
+    def optimize(
+        self,
+        optuna_config: SB3OptunaConfig | None = None,
+    ) -> "optuna.Study":
+        import optuna
+
+        from rl_pipeline.experiment.optuna import (
+            build_dashboard_command,
+            create_study,
+            launch_dashboard,
+        )
+
+        from .experiment.optuna import (
+            filter_algorithm_kwargs,
+            sample_params,
+            sample_params_from_config,
+        )
+
+        tune_config = optuna_config if optuna_config is not None else self.optuna_config
+        if tune_config is None:
+            raise ValueError(
+                "optuna_config is required. Set SB3PipelineConfig.optuna_config or pass it to optimize()."
+            )
+
+        if not tune_config.storage_url:
+            raise ValueError(
+                "optuna_config.storage_url is required for persistent studies and optuna-dashboard."
+            )
+
+        if tune_config.dashboard.launch:
+            if self.optuna_dashboard_process is None or self.optuna_dashboard_process.poll() is not None:
+                self.optuna_dashboard_process = launch_dashboard(
+                    storage_url=tune_config.storage_url,
+                    host=tune_config.dashboard.host,
+                    port=tune_config.dashboard.port,
+                )
+
+        dashboard_command = build_dashboard_command(
+            storage_url=tune_config.storage_url,
+            host=tune_config.dashboard.host,
+            port=tune_config.dashboard.port,
+        )
+        if self.verbose:
+            print(
+                "SB3Pipeline: Optuna dashboard command: "
+                f"{dashboard_command.as_shell_command()}"
+            )
+
+        study = create_study(
+            storage_url=tune_config.storage_url,
+            study_name=tune_config.study_name,
+            direction=tune_config.direction,
+            n_startup_trials=tune_config.n_startup_trials,
+            n_warmup_steps=tune_config.n_warmup_steps,
+        )
+
+        if tune_config.tune_params:
+
+            def _trial_sampler_from_config(
+                trial: optuna.trial.BaseTrial,
+            ) -> dict[str, Any]:
+                return sample_params_from_config(trial, tune_config.tune_params)
+
+            trial_sampler = _trial_sampler_from_config
+        elif tune_config.sample_params_fn is not None:
+
+            sample_params_fn = tune_config.sample_params_fn
+            assert sample_params_fn is not None
+
+            def _trial_sampler_from_callable(
+                trial: optuna.trial.BaseTrial,
+            ) -> dict[str, Any]:
+                return sample_params_fn(trial)
+
+            trial_sampler = _trial_sampler_from_callable
+
+        else:
+            trial_sampler = sample_params
+
+        algo_class = self.config.algo_config.algorithm
+        base_algo_kwargs = deepcopy(self.config.algo_config.algo_kwargs)
+
+        total_timesteps = (
+            tune_config.total_timesteps
+            if tune_config.total_timesteps is not None
+            else self.learn_config.total_timesteps
+        )
+        n_envs = self.config.vec_config.n_envs if self.config.vec_config else 1
+        eval_freq = max(total_timesteps // tune_config.n_evaluations // n_envs, 1)
+
+        def objective(trial: optuna.Trial) -> float:
+            train_env: VecEnv | None = None
+            eval_env = None
+            model: BaseAlgorithm | None = None
+            nan_encountered = False
+
+            try:
+                sampled_algo_kwargs = trial_sampler(trial)
+                trial_algo_kwargs = filter_algorithm_kwargs(
+                    algorithm_class=algo_class,
+                    algo_kwargs={**base_algo_kwargs, **sampled_algo_kwargs},
+                )
+
+                train_env = self.env_loader.vec_env()
+                eval_env = Monitor(self.env_loader.env())
+                model = algo_class(
+                    **trial_algo_kwargs,
+                    env=train_env,
+                    tensorboard_log=self.save_config.tb_save_dir,
+                    device=self.config.device,
+                )
+
+                eval_callback = TrialEvalCallback(
+                    eval_env=eval_env,
+                    trial=trial,
+                    n_eval_episodes=tune_config.n_eval_episodes,
+                    eval_freq=eval_freq,
+                    deterministic=tune_config.deterministic_eval,
+                    verbose=0,
+                )
+
+                learn_kwargs = self.learn_config.model_dump()
+                learn_kwargs["total_timesteps"] = total_timesteps
+                learn_kwargs["tb_log_name"] = (
+                    f"{self.learn_config.tb_log_name}_trial_{trial.number}"
+                )
+
+                try:
+                    model.learn(**learn_kwargs, callback=eval_callback)
+                except AssertionError as e:
+                    if self.verbose:
+                        print(
+                            "SB3Pipeline: AssertionError during Optuna trial "
+                            f"{trial.number}: {e}"
+                        )
+                    nan_encountered = True
+
+                if nan_encountered:
+                    return float("nan")
+
+                if eval_callback.is_pruned:
+                    raise optuna.exceptions.TrialPruned()
+
+                if eval_callback.last_mean_reward is None:
+                    return float("-inf")
+                return float(eval_callback.last_mean_reward)
+
+            finally:
+                if model is not None and model.env is not None:
+                    model.env.close()
+                if train_env is not None:
+                    train_env.close()
+                if eval_env is not None:
+                    eval_env.close()
+
+        study.optimize(
+            objective,
+            n_trials=tune_config.n_trials,
+            timeout=tune_config.timeout,
+            n_jobs=tune_config.n_jobs,
+        )
+        return study
 
 
 class SB3ReplicatePipeline:

@@ -12,6 +12,10 @@ from rl_pipeline.sb3 import (
 )
 
 
+def _dummy_sample_params(_trial):
+    return {"learning_rate": 1e-3}
+
+
 def test_sb3_pipeline_config_reader():
     target_read_config: dict[str, Any] = {
         "config_dir": "tests/sb3/assets/configs",
@@ -19,6 +23,7 @@ def test_sb3_pipeline_config_reader():
         "env_config_file": "cartpole_env_config.yaml",
         "experiment_id": "1.a",
         "model_config_file": "ppo.yaml",
+        "optuna_config": None,
         "retrain_model": False,
         "save_config": {
             "animation_dir": "animations",
@@ -123,3 +128,54 @@ def test_arbitrary_callback_config_reader_rejects_non_callback_class():
 
     with pytest.raises(AssertionError, match="must inherit from BaseCallback"):
         reader.to_config()
+
+
+def test_optuna_config_reader_to_config_resolves_sample_function():
+    reader = config_reader.SB3OptunaConfigReader(
+        storage_url="sqlite:///tmp.db",
+        n_trials=2,
+        sample_params_fn="tests.sb3.test_config_reader._dummy_sample_params",
+    )
+
+    config = reader.to_config()
+
+    assert config.storage_url == "sqlite:///tmp.db"
+    assert config.n_trials == 2
+    assert config.sample_params_fn is not None
+    assert config.sample_params_fn.__name__ == _dummy_sample_params.__name__
+    assert config.sample_params_fn(None) == _dummy_sample_params(None)
+
+
+def test_optuna_config_reader_to_config_with_tune_params():
+    reader = config_reader.SB3OptunaConfigReader(
+        storage_url="sqlite:///tmp.db",
+        tune_params=[
+            config_reader.SB3OptunaParamConfigReader(
+                name="gamma_eps",
+                suggest_type="float",
+                low=0.0001,
+                high=0.1,
+                log=True,
+                one_minus=True,
+                target="gamma",
+            ),
+            config_reader.SB3OptunaParamConfigReader(
+                name="activation",
+                suggest_type="categorical",
+                choices=["tanh", "relu"],
+                value_mapping={
+                    "tanh": "torch.nn.Tanh",
+                    "relu": "torch.nn.ReLU",
+                },
+                target="policy_kwargs.activation_fn",
+            ),
+        ],
+    )
+
+    config = reader.to_config()
+
+    assert len(config.tune_params) == 2
+    assert config.tune_params[0].target == "gamma"
+    assert config.tune_params[0].one_minus is True
+    assert config.tune_params[1].value_mapping is not None
+    assert config.tune_params[1].value_mapping["relu"].__name__ == "ReLU"

@@ -1,4 +1,5 @@
 import os
+from typing import TYPE_CHECKING
 
 import gymnasium as gym
 import numpy as np
@@ -9,6 +10,9 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import VecEnv, sync_envs_normalization
 
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
+
+if TYPE_CHECKING:
+    import optuna
 
 
 class EvalCallbackConfig(BaseModel):
@@ -297,3 +301,37 @@ class VideoRecorderCallback(BaseCallback):
             record_replay(self._eval_env, self.model, animation_save_path, False)
 
         return True
+
+
+class TrialEvalCallback(EvalCallback):
+    """Eval callback that reports intermediate rewards and supports Optuna pruning."""
+
+    def __init__(
+        self,
+        eval_env: gym.Env | VecEnv,
+        trial: "optuna.Trial",
+        n_eval_episodes: int = 5,
+        eval_freq: int = 10_000,
+        deterministic: bool = True,
+        verbose: int = 0,
+    ):
+        super().__init__(
+            eval_env=eval_env,
+            n_eval_episodes=n_eval_episodes,
+            eval_freq=eval_freq,
+            deterministic=deterministic,
+            verbose=verbose,
+        )
+        self.trial = trial
+        self.eval_idx = 0
+        self.is_pruned = False
+
+    def _on_step(self) -> bool:
+        continue_training = super()._on_step()
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            self.eval_idx += 1
+            self.trial.report(self.last_mean_reward, self.eval_idx)
+            if self.trial.should_prune():
+                self.is_pruned = True
+                return False
+        return continue_training
