@@ -11,5 +11,6 @@ and Optuna-based hyperparameter optimization.
 
    overview
    integrations
+   api/index
    usage/optuna_tuning
    citation
