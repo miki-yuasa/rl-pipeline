@@ -178,7 +178,7 @@ class SuccessEvalCallback(EvalCallback):
                         f"Goal success rate [{goal_name}]: {100 * goal_success_rate:.2f}%"
                     )
                 self.logger.record(
-                    f"eval/goal_success_rate/{goal_name}", goal_success_rate
+                    f"eval_goal_success_rates/{goal_name}", goal_success_rate
                 )
 
             if success_buffer_result.failure_rate:
