@@ -59,9 +59,11 @@ def init_callback(
     callbacks : list[BaseCallback]
         Ordered callback list passed to ``model.learn``.
     """
-
+    eval_callback_args = callback_config.eval_callback_config.model_dump()
+    # Remove eval_callback_cls from eval_callback_args since it's passed explicitly
+    eval_callback_args.pop("eval_callback_cls", None)
     eval_callback = callback_config.eval_callback_config.eval_callback_cls(
-        eval_env=eval_env, **callback_config.eval_callback_config.model_dump()
+        eval_env=eval_env, **eval_callback_args
     )
     callbacks: list[BaseCallback] = [eval_callback]
 
