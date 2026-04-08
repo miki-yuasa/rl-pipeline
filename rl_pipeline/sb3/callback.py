@@ -169,6 +169,17 @@ class SuccessEvalCallback(EvalCallback):
                     print(f"Success rate: {100 * success_rate:.2f}%")
                 self.logger.record("eval/success_rate", success_rate)
 
+            for goal_name, goal_success_rate in (
+                success_buffer_result.goal_success_rates.items()
+            ):
+                if self.verbose >= 1:
+                    print(
+                        f"Goal success rate [{goal_name}]: {100 * goal_success_rate:.2f}%"
+                    )
+                self.logger.record(
+                    f"eval/goal_success_rate/{goal_name}", goal_success_rate
+                )
+
             if success_buffer_result.failure_rate:
                 failure_rate: float = success_buffer_result.failure_rate
                 if self.verbose >= 1:

@@ -9,6 +9,7 @@ class SuccessBufferEval(BaseModel):
     success_rate: float | None = None
     episode_failures: list[bool] = []
     failure_rate: float | None = None
+    goal_success_rates: dict[str, float] = {}
 
 
 class SuccessBuffer:
@@ -37,6 +38,7 @@ class SuccessBuffer:
     def __init__(self):
         self._is_success_buffer: list[bool] = []
         self._is_failure_buffer: list[bool] = []
+        self._goal_success_buffer: dict[str, list[bool]] = {}
 
     def _log_success_callback(
         self, locals_: dict[str, Any], globals_: dict[str, Any]
@@ -60,6 +62,12 @@ class SuccessBuffer:
             maybe_is_failure: bool | None = info.get("is_failure")
             if maybe_is_success is not None:
                 self._is_success_buffer.append(maybe_is_success)
+                maybe_goal_name: Any = info.get("goal_name")
+                if maybe_goal_name is not None:
+                    goal_name = str(maybe_goal_name)
+                    if goal_name not in self._goal_success_buffer:
+                        self._goal_success_buffer[goal_name] = []
+                    self._goal_success_buffer[goal_name].append(maybe_is_success)
             if maybe_is_failure is not None:
                 self._is_failure_buffer.append(maybe_is_failure)
 
@@ -84,6 +92,7 @@ class SuccessBuffer:
         episode_failures: list[bool] = []
         success_rate: float | None = None
         failure_rate: float | None = None
+        goal_success_rates: dict[str, float] = {}
 
         if self._is_success_buffer:
             episode_successes: list[bool] = np.array(
@@ -97,15 +106,21 @@ class SuccessBuffer:
             ).tolist()
             failure_rate = float(np.mean(episode_failures))
 
+        for goal_name, goal_successes in self._goal_success_buffer.items():
+            if goal_successes:
+                goal_success_rates[goal_name] = float(np.mean(goal_successes))
+
         # Reset the buffer
         self._is_success_buffer.clear()
         self._is_failure_buffer.clear()
+        self._goal_success_buffer.clear()
 
         result = SuccessBufferEval(
             episode_successes=episode_successes,
             success_rate=success_rate,
             episode_failures=episode_failures,
             failure_rate=failure_rate,
+            goal_success_rates=goal_success_rates,
         )
 
         return result
