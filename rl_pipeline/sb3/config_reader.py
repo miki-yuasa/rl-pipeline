@@ -459,6 +459,7 @@ class SB3OptunaConfigReader(BaseModel, YAMLReaderMixin):
     n_trials: int = Field(ge=1, default=50)
     timeout: int | None = Field(default=None, ge=1)
     n_jobs: int = Field(ge=1, default=1)
+    parallel_backend: Literal["process", "thread"] = "process"
     n_startup_trials: int = Field(ge=0, default=5)
     n_warmup_steps: int = Field(ge=0, default=0)
     n_evaluations: int = Field(ge=1, default=2)
@@ -491,6 +492,7 @@ class SB3OptunaConfigReader(BaseModel, YAMLReaderMixin):
             n_trials=self.n_trials,
             timeout=self.timeout,
             n_jobs=self.n_jobs,
+            parallel_backend=self.parallel_backend,
             n_startup_trials=self.n_startup_trials,
             n_warmup_steps=self.n_warmup_steps,
             n_evaluations=self.n_evaluations,

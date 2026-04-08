@@ -5,6 +5,7 @@ It supports standard training/evaluation and Optuna-based hyperparameter
 optimization through ``SB3Pipeline.optimize``.
 """
 
+import multiprocessing as mp
 import os
 import subprocess
 from copy import deepcopy
@@ -535,9 +536,10 @@ class SB3Pipeline(
             raise ValueError(
                 "optuna_config.storage_url is required for persistent studies and optuna-dashboard."
             )
+        storage_url = tune_config.storage_url
 
         dashboard_command = build_dashboard_command(
-            storage_url=tune_config.storage_url,
+            storage_url=storage_url,
             host=tune_config.dashboard.host,
             port=tune_config.dashboard.port,
         )
@@ -548,7 +550,7 @@ class SB3Pipeline(
             )
 
         study = create_study(
-            storage_url=tune_config.storage_url,
+            storage_url=storage_url,
             study_name=tune_config.study_name,
             direction=tune_config.direction,
             n_startup_trials=tune_config.n_startup_trials,
@@ -561,7 +563,7 @@ class SB3Pipeline(
                 or self.optuna_dashboard_process.poll() is not None
             ):
                 self.optuna_dashboard_process = launch_dashboard(
-                    storage_url=tune_config.storage_url,
+                    storage_url=storage_url,
                     host=tune_config.dashboard.host,
                     port=tune_config.dashboard.port,
                 )
@@ -693,13 +695,84 @@ class SB3Pipeline(
                 if eval_env is not None:
                     eval_env.close()
 
-        study.optimize(
-            objective,
-            n_trials=tune_config.n_trials,
-            timeout=tune_config.timeout,
-            n_jobs=tune_config.n_jobs,
+        def _optimize_chunk(n_trials_chunk: int) -> None:
+            process_study = create_study(
+                storage_url=storage_url,
+                study_name=tune_config.study_name,
+                direction=tune_config.direction,
+                n_startup_trials=tune_config.n_startup_trials,
+                n_warmup_steps=tune_config.n_warmup_steps,
+            )
+            process_study.optimize(
+                objective,
+                n_trials=n_trials_chunk,
+                timeout=tune_config.timeout,
+                n_jobs=1,
+            )
+
+        if tune_config.parallel_backend == "thread":
+            study.optimize(
+                objective,
+                n_trials=tune_config.n_trials,
+                timeout=tune_config.timeout,
+                n_jobs=tune_config.n_jobs,
+            )
+            return study
+
+        if tune_config.n_jobs == 1:
+            study.optimize(
+                objective,
+                n_trials=tune_config.n_trials,
+                timeout=tune_config.timeout,
+                n_jobs=1,
+            )
+            return study
+
+        if "fork" not in mp.get_all_start_methods():
+            if self.verbose:
+                print(
+                    "SB3Pipeline: Process backend requires the 'fork' start method. "
+                    "Falling back to Optuna thread backend."
+                )
+            study.optimize(
+                objective,
+                n_trials=tune_config.n_trials,
+                timeout=tune_config.timeout,
+                n_jobs=tune_config.n_jobs,
+            )
+            return study
+
+        n_processes = tune_config.n_jobs
+        base_trials, remainder = divmod(tune_config.n_trials, n_processes)
+        trial_chunks = [
+            base_trials + (1 if i < remainder else 0) for i in range(n_processes)
+        ]
+
+        ctx = mp.get_context("fork")
+        processes: list[Any] = []
+        for n_trials_chunk in trial_chunks:
+            if n_trials_chunk <= 0:
+                continue
+            process = ctx.Process(target=_optimize_chunk, args=(n_trials_chunk,))
+            process.start()
+            processes.append(process)
+
+        for process in processes:
+            process.join()
+
+        failed = [process.pid for process in processes if process.exitcode != 0]
+        if failed:
+            raise RuntimeError(
+                f"Optuna process workers failed with non-zero exit status: {failed}"
+            )
+
+        return create_study(
+            storage_url=storage_url,
+            study_name=tune_config.study_name,
+            direction=tune_config.direction,
+            n_startup_trials=tune_config.n_startup_trials,
+            n_warmup_steps=tune_config.n_warmup_steps,
         )
-        return study
 
 
 class SB3ReplicatePipeline:

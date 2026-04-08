@@ -141,6 +141,7 @@ def test_optuna_config_reader_to_config_resolves_sample_function():
 
     assert config.storage_url == "sqlite:///tmp.db"
     assert config.n_trials == 2
+    assert config.parallel_backend == "process"
     assert config.sample_params_fn is not None
     assert config.sample_params_fn.__name__ == _dummy_sample_params.__name__
     assert config.sample_params_fn(None) == _dummy_sample_params(None)

@@ -168,7 +168,10 @@ def test_sb3_pipeline_optimize_initializes_study_before_dashboard(monkeypatch):
         call_order.append("launch_dashboard")
         return SimpleNamespace(poll=lambda: None)
 
-    monkeypatch.setattr("rl_pipeline.experiment.optuna.create_study", fake_create_study)
+    monkeypatch.setattr(
+        "rl_pipeline.experiment.optuna.create_study",
+        fake_create_study,
+    )
     monkeypatch.setattr(
         "rl_pipeline.experiment.optuna.launch_dashboard", fake_launch_dashboard
     )
@@ -177,6 +180,69 @@ def test_sb3_pipeline_optimize_initializes_study_before_dashboard(monkeypatch):
 
     assert call_order == ["create_study", "launch_dashboard"]
     assert study is fake_study
+
+
+def test_sb3_pipeline_optimize_uses_process_backend(monkeypatch):
+    config = SB3PipelineConfigReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    ).to_config()
+
+    assert config.vec_config is not None
+    config.vec_config.vec_env_cls = DummyVecEnv
+    config.vec_config.n_envs = 1
+    config.optuna_config = SB3OptunaConfig(
+        storage_url="sqlite:///study_process_mode.db",
+        n_trials=5,
+        n_jobs=3,
+        parallel_backend="process",
+        dashboard=SB3OptunaDashboardConfig(launch=False),
+        tune_params=[],
+        sample_params_fn=lambda trial: {},
+    )
+
+    pipeline = SB3Pipeline(config=config, verbose=False)
+
+    optimize_calls: list[dict[str, int]] = []
+    studies: list[object] = []
+
+    class FakeStudy:
+        def optimize(self, objective, n_trials, timeout, n_jobs):
+            optimize_calls.append({"n_trials": n_trials, "n_jobs": n_jobs})
+
+    def fake_create_study(*args, **kwargs):
+        study = FakeStudy()
+        studies.append(study)
+        return study
+
+    class FakeProcess:
+        def __init__(self, target, args):
+            self._target = target
+            self._args = args
+            self.exitcode = 0
+            self.pid = 12345
+
+        def start(self):
+            self._target(*self._args)
+
+        def join(self):
+            return None
+
+    class FakeContext:
+        Process = FakeProcess
+
+    monkeypatch.setattr("rl_pipeline.experiment.optuna.create_study", fake_create_study)
+    monkeypatch.setattr("multiprocessing.get_all_start_methods", lambda: ["fork"])
+    monkeypatch.setattr("multiprocessing.get_context", lambda method: FakeContext())
+
+    result = pipeline.optimize()
+
+    assert result is studies[-1]
+    assert len(studies) == 5
+    assert optimize_calls == [
+        {"n_trials": 2, "n_jobs": 1},
+        {"n_trials": 2, "n_jobs": 1},
+        {"n_trials": 1, "n_jobs": 1},
+    ]
 
 
 def test_sb3_pipeline_optimize_saves_trial_model_artifacts(monkeypatch, tmp_path: Path):

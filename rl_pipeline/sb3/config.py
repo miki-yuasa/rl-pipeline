@@ -314,7 +314,9 @@ class SB3OptunaConfig(BaseModel):
     timeout : int | None
         Optional timeout (seconds) for optimization.
     n_jobs : int
-        Number of parallel worker jobs for ``study.optimize``.
+        Number of parallel workers used for optimization.
+    parallel_backend : Literal["process", "thread"]
+        Parallel execution backend. ``"process"`` is default.
     n_startup_trials : int
         Number of startup trials before TPE-based decisions.
     n_warmup_steps : int
@@ -341,6 +343,7 @@ class SB3OptunaConfig(BaseModel):
     n_trials: int = Field(ge=1, default=50)
     timeout: int | None = Field(default=None, ge=1)
     n_jobs: int = Field(ge=1, default=1)
+    parallel_backend: Literal["process", "thread"] = "process"
     n_startup_trials: int = Field(ge=0, default=5)
     n_warmup_steps: int = Field(ge=0, default=0)
     n_evaluations: int = Field(ge=1, default=2)
