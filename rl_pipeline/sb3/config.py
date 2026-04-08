@@ -198,7 +198,7 @@ class SB3CallbackConfig(BaseModel):
     """
 
     eval_callback_config: EvalCallbackConfig
-    ckpt_callback_config: CheckpointCallbackConfig
+    ckpt_callback_config: CheckpointCallbackConfig | None = None
     video_recorder_callback_config: VideoRecorderCallbackConfig | None = None
     arbitrary_callback_configs: list[ArbitraryCallbackConfig] = Field(
         default_factory=list

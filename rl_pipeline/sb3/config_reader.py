@@ -170,6 +170,7 @@ class MakeVecEnvConfigReader(BaseModel, YAMLReaderMixin):
 class EvalCallbackConfigReader(BaseModel, YAMLReaderMixin):
     """Reader for evaluation callback settings."""
 
+    eval_callback_cls: str = "rl_pipeline.sb3.callback.SuccessEvalCallback"
     eval_freq: int = Field(ge=0)
     n_eval_episodes: int = Field(ge=1)
     log_path: str = "eval"
@@ -189,7 +190,9 @@ class EvalCallbackConfigReader(BaseModel, YAMLReaderMixin):
         config : EvalCallbackConfig
             Runtime eval callback config.
         """
+        eval_callback_cls = get_class(self.eval_callback_cls)
         return EvalCallbackConfig(
+            eval_callback_cls=eval_callback_cls,
             eval_freq=self.eval_freq,
             n_eval_episodes=self.n_eval_episodes,
             best_model_save_path=save_config.model_save_dir,

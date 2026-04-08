@@ -16,7 +16,6 @@ from gymnasium import Env, Wrapper
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.type_aliases import PolicyPredictor
 from stable_baselines3.common.vec_env import VecEnv
 
@@ -25,7 +24,7 @@ from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .callback import SuccessEvalCallback, TrialEvalCallback, VideoRecorderCallback
+from .callback import TrialEvalCallback, VideoRecorderCallback
 from .config import (
     SB3CallbackConfig,
     SB3LearnConfig,
@@ -60,13 +59,17 @@ def init_callback(
     callbacks : list[BaseCallback]
         Ordered callback list passed to ``model.learn``.
     """
-    ckpt_callback = CheckpointCallback(
-        **callback_config.ckpt_callback_config.model_dump()
-    )
-    eval_callback = SuccessEvalCallback(
+
+    eval_callback = callback_config.eval_callback_config.eval_callback_cls(
         eval_env=eval_env, **callback_config.eval_callback_config.model_dump()
     )
-    callbacks = [ckpt_callback, eval_callback]
+    callbacks: list[BaseCallback] = [eval_callback]
+
+    if callback_config.ckpt_callback_config:
+        ckpt_callback = CheckpointCallback(
+            **callback_config.ckpt_callback_config.model_dump()
+        )
+        callbacks.append(ckpt_callback)
 
     if callback_config.video_recorder_callback_config:
         video_callback = VideoRecorderCallback(
@@ -356,6 +359,10 @@ class SB3Pipeline(
                 )
 
             case _:
+                if not self.callback_configs.ckpt_callback_config:
+                    raise ValueError(
+                        "Checkpoint loading requires a checkpoint callback configuration."
+                    )
                 model = self.model_loader.load_checkpoint(
                     ckpt_dir=self.callback_configs.ckpt_callback_config.save_path,
                     ckpt_name_prefix=self.callback_configs.ckpt_callback_config.name_prefix,
