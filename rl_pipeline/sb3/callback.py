@@ -303,7 +303,7 @@ class VideoRecorderCallback(BaseCallback):
         return True
 
 
-class TrialEvalCallback(EvalCallback):
+class TrialEvalCallback(SuccessEvalCallback):
     """Eval callback that reports intermediate rewards and supports Optuna pruning."""
 
     def __init__(
@@ -313,7 +313,7 @@ class TrialEvalCallback(EvalCallback):
         n_eval_episodes: int = 5,
         eval_freq: int = 10_000,
         best_model_save_path: str | None = None,
-        deterministic: bool = True,
+        deterministic: bool = False,
         verbose: int = 0,
     ):
         super().__init__(

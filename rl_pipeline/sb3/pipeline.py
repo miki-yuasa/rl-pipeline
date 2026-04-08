@@ -638,7 +638,7 @@ class SB3Pipeline(
                 )
 
                 train_env = self.env_loader.vec_env()
-                eval_env = Monitor(self.env_loader.env())
+                eval_env = self.env_loader.vec_env()
                 model = algo_class(
                     **trial_algo_kwargs,
                     env=train_env,
