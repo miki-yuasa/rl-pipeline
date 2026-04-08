@@ -237,7 +237,9 @@ def test_sb3_pipeline_optimize_saves_trial_model_artifacts(monkeypatch, tmp_path
             self.is_pruned = False
             self.last_mean_reward = 1.0
 
-    monkeypatch.setattr("rl_pipeline.sb3.pipeline.TrialEvalCallback", FakeTrialEvalCallback)
+    monkeypatch.setattr(
+        "rl_pipeline.sb3.pipeline.TrialEvalCallback", FakeTrialEvalCallback
+    )
 
     study = pipeline.optimize()
     trial = study.trials[0]
@@ -246,7 +248,5 @@ def test_sb3_pipeline_optimize_saves_trial_model_artifacts(monkeypatch, tmp_path
     assert trial_best_dirs == [str(expected_dir)]
     assert trial.user_attrs["artifact_dir"] == str(expected_dir)
     assert trial.user_attrs["best_model_path"] == str(expected_dir / "best_model.zip")
-    assert trial.user_attrs["final_model_path"] == str(
-        expected_dir / "final_model.zip"
-    )
+    assert trial.user_attrs["final_model_path"] == str(expected_dir / "final_model.zip")
     assert (expected_dir / "final_model.zip").exists()
