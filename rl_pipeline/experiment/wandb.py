@@ -218,7 +218,13 @@ class WandbInitConfig(BaseModel):
 
 
 class WandbExperimentManager(
-    BaseExperimentManager[PipelineConfigType, Run], Generic[PipelineConfigType]
+    BaseExperimentManager[
+        PipelineConfigType,
+        Run,
+        dict[str, Any] | WandbInitConfig,
+        BaseModel,
+    ],
+    Generic[PipelineConfigType],
 ):
     """
     Experiment manager for Weights & Biases (wandb).

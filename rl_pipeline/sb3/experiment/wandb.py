@@ -32,11 +32,10 @@ class SB3WandbCallbackConfig(BaseModel):
 
 class SB3WandbExperimentManager(
     SB3ExperimentManager[
-        Run,
         PipelineConfigType,
+        Run,
         dict[str, Any] | WandbInitConfig,
         BaseModel,
-        dict[str, Any] | SB3WandbCallbackConfig,
     ]
 ):
     def __init__(self, config: PipelineConfigType) -> None:

@@ -16,7 +16,6 @@ class SB3ExperimentManager(
         RunType,
         ManagerConfigType,
         LoggedParamConfigType,
-        CallbackConfigType,
     ]
 ):
     """
