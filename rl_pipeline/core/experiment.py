@@ -77,15 +77,7 @@ class ExperimentManagerConfig(
         CallbackConfigType,
     ],
 ):
-    manager_class: type[
-        BaseExperimentManager[
-            PipelineConfigType,
-            RunType,
-            ManagerConfigType,
-            LoggedParamConfigType,
-            CallbackConfigType,
-        ]
-    ]
+    manager_class: type[BaseExperimentManager]  # pyrefly: ignore [implicit-any-type-argument]
     manager_config: dict[str, Any]
 
 
