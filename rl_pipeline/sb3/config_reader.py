@@ -6,7 +6,7 @@ runtime Python objects (classes/callables) used by the SB3 pipeline.
 
 import importlib.util
 import os
-from typing import Any, Generic, Literal, TypeVar, override
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -69,7 +69,6 @@ class SB3AlgorithmConfigReader(
     algorithm: str = "PPO"
     algo_kwargs: dict[str, Any] = {}
 
-    @override
     def to_config(self) -> SB3AlgorithmConfig:
         """Resolve and build :class:`SB3AlgorithmConfig`.
 
@@ -112,7 +111,6 @@ class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig], YAMLReaderMi
     reset_num_timesteps: bool = True
     progress_bar: bool = False
 
-    @override
     def to_config(self) -> SB3LearnConfig:
         """Build :class:`SB3LearnConfig` from reader fields.
 
@@ -352,7 +350,6 @@ class SB3ExperimentManagerConfigReader(
     manager_config: dict[str, Any]
     callback_config: dict[str, Any]
 
-    @override
     def to_config(self, run_name_suffix: str = "") -> SB3ExperimentManagerConfig:
         """Resolve manager class and build runtime manager config.
 
@@ -561,7 +558,6 @@ class SB3PipelineConfigReader(
     experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
     optuna_config: SB3OptunaConfigReader | None = None
 
-    @override
     def to_config(self) -> SB3PipelineConfig:
         """Build :class:`SB3PipelineConfig` from YAML-linked sub-configs.
 
@@ -724,7 +720,6 @@ class SB3ReplicatePipelineConfigReader(
     replicate_config: ReplicateConfig
     single_pipeline_config: SB3PipelineConfigReaderType
 
-    @override
     def to_config(self) -> SB3ReplicatePipelineConfig:
         """Generate per-replica pipeline configs.
 

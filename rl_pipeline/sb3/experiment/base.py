@@ -1,5 +1,3 @@
-from typing import override
-
 from stable_baselines3.common.callbacks import BaseCallback
 
 from rl_pipeline.core.experiment import (
@@ -34,7 +32,6 @@ class SB3ExperimentManager(
         # Initialize WandbExperimentManager
         ...
 
-    @override
     def start_run(
         self,
         manager_config: ManagerConfigType,
@@ -57,7 +54,6 @@ class SB3ExperimentManager(
         """
         ...
 
-    @override
     def end_run(self) -> None: ...
 
     @staticmethod

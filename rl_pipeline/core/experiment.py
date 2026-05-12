@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar, override
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -105,7 +105,6 @@ class ExperimentManagerConfigReader(
     manager_class: str
     manager_config: dict[str, Any]
 
-    @override
     def to_config(
         self,
     ) -> ExperimentManagerConfig[

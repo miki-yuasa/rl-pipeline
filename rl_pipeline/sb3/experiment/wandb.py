@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Generic, Literal, override
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from wandb.integration.sb3 import WandbCallback
@@ -45,7 +45,6 @@ class SB3WandbExperimentManager(
             WandbExperimentManager(config)
         )
 
-    @override
     def start_run(
         self,
         manager_config: dict[str, Any] | WandbInitConfig,
@@ -53,11 +52,9 @@ class SB3WandbExperimentManager(
     ) -> Run:
         return self.wandb_manager.start_run(manager_config, logged_param_config)
 
-    @override
     def end_run(self) -> None:
         return self.wandb_manager.end_run()
 
-    @override
     def logger_callback(self, callback_config: dict[str, Any] | SB3WandbCallbackConfig):
         callback_config_dict = (
             callback_config
@@ -68,7 +65,6 @@ class SB3WandbExperimentManager(
             **callback_config_dict,
         )
 
-    @override
     @staticmethod
     def add_run_name_suffix(
         manager_config: dict[str, Any] | WandbInitConfig, run_name_suffix: str
