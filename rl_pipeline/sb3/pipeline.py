@@ -900,6 +900,25 @@ class SB3ReplicatePipeline:
             models.append(model)
         return models
 
+    def load_model(
+        self,
+        rep_idx: int = 0,
+        ckpt_timestep: int | Literal["latest", "final", "best"] = "final",
+        env: Env | Wrapper | None = None,
+        device: str | None = None,
+    ) -> list[BaseAlgorithm]:
+        """Load models for all replicate pipelines.
+
+        Returns
+        -------
+        models : list[BaseAlgorithm]
+            Loaded models for each replicate.
+        """
+        model = self.ind_pipelines[rep_idx].load_model(
+            ckpt_timestep=ckpt_timestep, env=env, device=device
+        )
+        return model
+
     def record_replays(
         self,
         models: list[BaseAlgorithm],
