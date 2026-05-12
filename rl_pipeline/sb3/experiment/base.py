@@ -1,16 +1,26 @@
-from typing import Any, Generic, TypeVar
+from typing import override
 
 from stable_baselines3.common.callbacks import BaseCallback
 
-from rl_pipeline.core.experiment import RunType
-from rl_pipeline.core.typing import PipelineConfigType
-
-SB3ExperimentManagerType = TypeVar(
-    "SB3ExperimentManagerType", bound="SB3ExperimentManager"
+from rl_pipeline.core.experiment import (
+    BaseExperimentManager,
+    CallbackConfigType,
+    LoggedParamConfigType,
+    ManagerConfigType,
+    PipelineConfigType,
+    RunType,
 )
 
 
-class SB3ExperimentManager(Generic[RunType, PipelineConfigType]):
+class SB3ExperimentManager(
+    BaseExperimentManager[
+        PipelineConfigType,
+        RunType,
+        ManagerConfigType,
+        LoggedParamConfigType,
+        CallbackConfigType,
+    ]
+):
     """
     Protocol for experiment managers in the SB3 framework.
 
@@ -24,9 +34,14 @@ class SB3ExperimentManager(Generic[RunType, PipelineConfigType]):
         # Initialize WandbExperimentManager
         ...
 
-    def start_run(self, manager_config, logged_param_config) -> RunType: ...
+    @override
+    def start_run(
+        self,
+        manager_config: ManagerConfigType,
+        logged_param_config: LoggedParamConfigType,
+    ) -> RunType: ...
 
-    def logger_callback(self, callback_config) -> BaseCallback:
+    def logger_callback(self, callback_config: CallbackConfigType) -> BaseCallback:
         """
         Create a logger callback for the experiment manager.
 
@@ -42,10 +57,14 @@ class SB3ExperimentManager(Generic[RunType, PipelineConfigType]):
         """
         ...
 
+    @override
     def end_run(self) -> None: ...
 
     @staticmethod
-    def add_run_name_suffix(manager_config, run_name_suffix: str) -> Any:
+    def add_run_name_suffix(
+        manager_config: ManagerConfigType,
+        run_name_suffix: str,
+    ) -> ManagerConfigType:
         """
         Add a suffix to the run name in the manager config.
         Default behavior is just passing.

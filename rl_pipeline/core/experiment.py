@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, override
 
 from pydantic import BaseModel
 
@@ -8,10 +8,21 @@ from .utils.io import get_class
 
 ExperimentManagerType = TypeVar("ExperimentManagerType")
 
-RunType = TypeVar("RunType", covariant=True)
+RunType = TypeVar("RunType")
+ManagerConfigType = TypeVar("ManagerConfigType")
+LoggedParamConfigType = TypeVar("LoggedParamConfigType")
+CallbackConfigType = TypeVar("CallbackConfigType")
 
 
-class BaseExperimentManager(Generic[PipelineConfigType, RunType]):
+class BaseExperimentManager(
+    Generic[
+        PipelineConfigType,
+        RunType,
+        ManagerConfigType,
+        LoggedParamConfigType,
+        CallbackConfigType,
+    ]
+):
     """
     Base class for experiment managers such as Weights & Biases (wandb) and MLflow.
     """
@@ -20,7 +31,11 @@ class BaseExperimentManager(Generic[PipelineConfigType, RunType]):
         self.config: PipelineConfigType = config
         self.run: RunType | None = None
 
-    def start_run(self, manager_config, logged_param_config: BaseModel) -> RunType:
+    def start_run(
+        self,
+        manager_config: ManagerConfigType,
+        logged_param_config: LoggedParamConfigType,
+    ) -> RunType:
         """
         Start a new experiment run.
 
@@ -52,18 +67,54 @@ class BaseExperimentManager(Generic[PipelineConfigType, RunType]):
         raise NotImplementedError("Subclasses must implement end_run method.")
 
 
-class ExperimentManagerConfig(BaseModel):
-    manager_class: type[BaseExperimentManager]
+class ExperimentManagerConfig(
+    BaseModel,
+    Generic[
+        PipelineConfigType,
+        RunType,
+        ManagerConfigType,
+        LoggedParamConfigType,
+        CallbackConfigType,
+    ],
+):
+    manager_class: type[
+        BaseExperimentManager[
+            PipelineConfigType,
+            RunType,
+            ManagerConfigType,
+            LoggedParamConfigType,
+            CallbackConfigType,
+        ]
+    ]
     manager_config: dict[str, Any]
 
 
 class ExperimentManagerConfigReader(
-    BaseModel, ConfigReader[ExperimentManagerConfig], YAMLReaderMixin
+    BaseModel,
+    ConfigReader[
+        ExperimentManagerConfig[
+            PipelineConfigType,
+            RunType,
+            ManagerConfigType,
+            LoggedParamConfigType,
+            CallbackConfigType,
+        ]
+    ],
+    YAMLReaderMixin,
 ):
     manager_class: str
     manager_config: dict[str, Any]
 
-    def to_config(self) -> ExperimentManagerConfig:
+    @override
+    def to_config(
+        self,
+    ) -> ExperimentManagerConfig[
+        PipelineConfigType,
+        RunType,
+        ManagerConfigType,
+        LoggedParamConfigType,
+        CallbackConfigType,
+    ]:
         manager_class = get_class(self.manager_class)
         assert manager_class is not None, (
             f"Could not find experiment manager class for {self.manager_class}"

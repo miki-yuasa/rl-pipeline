@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeVar
 
 from gymnasium import Wrapper
 from pydantic import BaseModel, ConfigDict

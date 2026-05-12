@@ -1,12 +1,12 @@
 import copy
-from typing import Any, Generic, Literal
+from typing import Any, Generic, Literal, override
 
 from pydantic import BaseModel, Field
+from wandb.integration.sb3 import WandbCallback
+from wandb.sdk.wandb_run import Run
 
 from rl_pipeline.core import PipelineConfigType
 from rl_pipeline.experiment.wandb import WandbExperimentManager, WandbInitConfig
-from wandb.integration.sb3 import WandbCallback
-from wandb.sdk.wandb_run import Run
 
 from .base import SB3ExperimentManager
 
@@ -30,13 +30,22 @@ class SB3WandbCallbackConfig(BaseModel):
     log: Literal["gradients", "parameters", "all"] | None = "all"
 
 
-class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
+class SB3WandbExperimentManager(
+    SB3ExperimentManager[
+        Run,
+        PipelineConfigType,
+        dict[str, Any] | WandbInitConfig,
+        BaseModel,
+        dict[str, Any] | SB3WandbCallbackConfig,
+    ]
+):
     def __init__(self, config: PipelineConfigType) -> None:
         # Initialize WandbExperimentManager
         self.wandb_manager: WandbExperimentManager[PipelineConfigType] = (
             WandbExperimentManager(config)
         )
 
+    @override
     def start_run(
         self,
         manager_config: dict[str, Any] | WandbInitConfig,
@@ -44,9 +53,11 @@ class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
     ) -> Run:
         return self.wandb_manager.start_run(manager_config, logged_param_config)
 
+    @override
     def end_run(self) -> None:
         return self.wandb_manager.end_run()
 
+    @override
     def logger_callback(self, callback_config: dict[str, Any] | SB3WandbCallbackConfig):
         callback_config_dict = (
             callback_config
@@ -57,6 +68,7 @@ class SB3WandbExperimentManager(SB3ExperimentManager[Run, PipelineConfigType]):
             **callback_config_dict,
         )
 
+    @override
     @staticmethod
     def add_run_name_suffix(
         manager_config: dict[str, Any] | WandbInitConfig, run_name_suffix: str

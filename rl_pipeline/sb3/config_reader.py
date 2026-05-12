@@ -6,7 +6,7 @@ runtime Python objects (classes/callables) used by the SB3 pipeline.
 
 import importlib.util
 import os
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, override
 
 from pydantic import BaseModel, Field
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -69,6 +69,7 @@ class SB3AlgorithmConfigReader(
     algorithm: str = "PPO"
     algo_kwargs: dict[str, Any] = {}
 
+    @override
     def to_config(self) -> SB3AlgorithmConfig:
         """Resolve and build :class:`SB3AlgorithmConfig`.
 
@@ -111,6 +112,7 @@ class SB3LearnConfigReader(BaseModel, ConfigReader[SB3LearnConfig], YAMLReaderMi
     reset_num_timesteps: bool = True
     progress_bar: bool = False
 
+    @override
     def to_config(self) -> SB3LearnConfig:
         """Build :class:`SB3LearnConfig` from reader fields.
 
@@ -350,6 +352,7 @@ class SB3ExperimentManagerConfigReader(
     manager_config: dict[str, Any]
     callback_config: dict[str, Any]
 
+    @override
     def to_config(self, run_name_suffix: str = "") -> SB3ExperimentManagerConfig:
         """Resolve manager class and build runtime manager config.
 
@@ -540,7 +543,9 @@ class SB3ModelConfigReader(BaseModel, YAMLReaderMixin):
 
 
 class SB3PipelineConfigReader(
-    BaseModel, ConfigReader[SB3PipelineConfig], YAMLReaderMixin
+    BaseModel,
+    ConfigReader[SB3PipelineConfig],
+    YAMLReaderMixin,
 ):
     """Reader for top-level SB3 pipeline configuration."""
 
@@ -550,11 +555,13 @@ class SB3PipelineConfigReader(
     save_config: SaveConfigReader
     config_dir: str = "configs"
     env_config_file: str = "env_config.yaml"
+    wrapper_config_reader_cls: str = "rl_pipeline.gymnasium.WrapperConfigReader"
     wrapper_config_file: str | None = None
     model_config_file: str = "model_config.yaml"
     experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
     optuna_config: SB3OptunaConfigReader | None = None
 
+    @override
     def to_config(self) -> SB3PipelineConfig:
         """Build :class:`SB3PipelineConfig` from YAML-linked sub-configs.
 
@@ -630,8 +637,13 @@ class SB3PipelineConfigReader(
             Wrapper configuration or ``None`` when not configured.
         """
         if self.wrapper_config_file:
+            wrapper_config_reader_cls: type[WrapperConfigReader] = get_class(
+                self.wrapper_config_reader_cls
+            )
             wrapper_config_reader = read_config_dict_from_yaml(
-                self.config_dir, self.wrapper_config_file, WrapperConfigReader
+                self.config_dir,
+                self.wrapper_config_file,
+                wrapper_config_reader_cls,
             )
             wrapper_config = wrapper_config_reader.to_config()
             return wrapper_config
@@ -712,6 +724,7 @@ class SB3ReplicatePipelineConfigReader(
     replicate_config: ReplicateConfig
     single_pipeline_config: SB3PipelineConfigReaderType
 
+    @override
     def to_config(self) -> SB3ReplicatePipelineConfig:
         """Generate per-replica pipeline configs.
 
