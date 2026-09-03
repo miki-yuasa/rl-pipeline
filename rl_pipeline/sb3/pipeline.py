@@ -7,6 +7,7 @@ optimization through ``SB3Pipeline.optimize``.
 
 import multiprocessing as mp
 import os
+from pathlib import Path
 import subprocess
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal
@@ -531,8 +532,10 @@ class SB3Pipeline(
         )
 
         from .experiment.optuna import (
+            deep_update,
             filter_algorithm_kwargs,
             sample_params_from_config,
+            split_sampled_params,
         )
 
         tune_config = optuna_config if optuna_config is not None else self.optuna_config
@@ -640,14 +643,43 @@ class SB3Pipeline(
             final_model_path = os.path.join(trial_artifact_dir, "final_model.zip")
 
             try:
-                sampled_algo_kwargs = trial_sampler(trial)
+                sampled_raw = trial_sampler(trial)
+                base_wrapper_kwargs = (
+                    self.config.wrapper_config.wrapper_kwargs
+                    if self.config.wrapper_config
+                    else None
+                )
+                sampled_algo_kwargs, sampled_wrapper_kwargs = split_sampled_params(
+                    sampled_raw, base_wrapper_kwargs
+                )
+                merged_algo_kwargs = deep_update(
+                    deepcopy(base_algo_kwargs), sampled_algo_kwargs
+                )
                 trial_algo_kwargs = filter_algorithm_kwargs(
                     algorithm_class=algo_class,
-                    algo_kwargs={**base_algo_kwargs, **sampled_algo_kwargs},
+                    algo_kwargs=merged_algo_kwargs,
                 )
 
-                train_env = self.env_loader.vec_env()
-                eval_env = self.env_loader.vec_env()
+                if sampled_wrapper_kwargs and self.config.wrapper_config:
+                    trial_wrapper_kwargs = deep_update(
+                        deepcopy(self.config.wrapper_config.wrapper_kwargs),
+                        sampled_wrapper_kwargs,
+                    )
+                    from rl_pipeline.gymnasium import WrapperConfig
+                    trial_wrapper_config = WrapperConfig(
+                        wrapper_class=self.config.wrapper_config.wrapper_class,
+                        wrapper_kwargs=trial_wrapper_kwargs,
+                    )
+                    trial_env_loader = SB3EnvLoader(
+                        env_config=self.config.env_config,
+                        wrapper_config=trial_wrapper_config,
+                        vec_config=self.config.vec_config,
+                    )
+                else:
+                    trial_env_loader = self.env_loader
+
+                train_env = trial_env_loader.vec_env()
+                eval_env = trial_env_loader.vec_env()
                 model = algo_class(
                     **trial_algo_kwargs,
                     env=train_env,
@@ -782,6 +814,43 @@ class SB3Pipeline(
             n_startup_trials=tune_config.n_startup_trials,
             n_warmup_steps=tune_config.n_warmup_steps,
         )
+
+    def export_best_params(
+        self,
+        study: "optuna.Study",
+        out_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Export best trial hyperparameters and statistics from an Optuna study.
+
+        Parameters
+        ----------
+        study : optuna.Study
+            Completed or active Optuna study.
+        out_path : str | Path | None, optional
+            Optional path to write the YAML summary.
+
+        Returns
+        -------
+        summary : dict[str, Any]
+            Best trial statistics and parameter dictionary.
+        """
+        import yaml
+        from pathlib import Path
+
+        best_trial = study.best_trial
+        summary = {
+            "study_name": study.study_name,
+            "best_value": study.best_value,
+            "best_trial_number": best_trial.number,
+            "best_params": best_trial.params,
+            "user_attrs": best_trial.user_attrs,
+        }
+        if out_path:
+            out_file = Path(out_path)
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            with out_file.open("w", encoding="utf-8") as f:
+                yaml.safe_dump(summary, f, default_flow_style=False)
+        return summary
 
 
 class SB3ReplicatePipeline:

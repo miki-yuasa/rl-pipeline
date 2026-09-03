@@ -316,3 +316,130 @@ def test_sb3_pipeline_optimize_saves_trial_model_artifacts(monkeypatch, tmp_path
     assert trial.user_attrs["best_model_path"] == str(expected_dir / "best_model.zip")
     assert trial.user_attrs["final_model_path"] == str(expected_dir / "final_model.zip")
     assert (expected_dir / "final_model.zip").exists()
+
+
+def test_split_sampled_params_and_deep_update():
+    from rl_pipeline.sb3.experiment.optuna import deep_update, split_sampled_params
+
+    # Target routing test
+    sampled = {
+        "learning_rate": 1e-4,
+        "wrapper": {"max_steps": 50},
+        "algo_kwargs": {"batch_size": 512},
+    }
+    algo, wrapper = split_sampled_params(sampled, base_wrapper_kwargs={"dense_scale": 1.0})
+    assert algo == {"learning_rate": 1e-4, "batch_size": 512}
+    assert wrapper == {"max_steps": 50}
+
+    # Deep update test
+    base = {"nested": {"a": 1, "b": 2}, "flat": 3}
+    update = {"nested": {"b": 20, "c": 30}}
+    res = deep_update(base, update)
+    assert res["nested"] == {"a": 1, "b": 20, "c": 30}
+    assert res["flat"] == 3
+
+
+def test_replicate_config_templates_and_seeds(tmp_path: Path):
+    from rl_pipeline.core import ReplicateConfig
+    from rl_pipeline.gymnasium.config import WrapperConfig
+    from rl_pipeline.sb3.config_reader import (
+        SB3PipelineConfigReader,
+        SB3ReplicatePipelineConfigReader,
+    )
+    import gymnasium as gym
+
+    class DummyWrapper(gym.Wrapper):
+        pass
+
+    class DummyPipelineReader(SB3PipelineConfigReader):
+        def _to_wrapper_config(self, replicate_signature: str = ""):
+            return WrapperConfig(
+                wrapper_class=DummyWrapper,
+                wrapper_kwargs={
+                    "model_path": f"out/{replicate_signature}/model.zip",
+                    "rep": "{rep_id}",
+                },
+            )
+
+    single_reader = DummyPipelineReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    )
+    reader = SB3ReplicatePipelineConfigReader[DummyPipelineReader](
+        replicate_config=ReplicateConfig(num_replicates=3, replicate_signature="rep_{rep_id}"),
+        single_pipeline_config=single_reader,
+    )
+
+    replicate_config = reader.to_config()
+    assert len(replicate_config.ind_pipeline_configs) == 3
+
+    # Check template formatting
+    assert (
+        replicate_config.ind_pipeline_configs[0].wrapper_config.wrapper_kwargs["model_path"]
+        == "out/rep_0/model.zip"
+    )
+    assert (
+        replicate_config.ind_pipeline_configs[1].wrapper_config.wrapper_kwargs["model_path"]
+        == "out/rep_1/model.zip"
+    )
+
+    # Check distinct seeds
+    assert replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] is not None
+    assert replicate_config.ind_pipeline_configs[1].algo_config.algo_kwargs["seed"] == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 10
+    assert replicate_config.ind_pipeline_configs[2].algo_config.algo_kwargs["seed"] == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 20
+
+
+def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
+    from rl_pipeline.gymnasium.config import WrapperConfig
+    import gymnasium as gym
+
+    class KwargRecorderWrapper(gym.Wrapper):
+        recorded_kwargs = {}
+        def __init__(self, env, **kwargs):
+            super().__init__(env)
+            KwargRecorderWrapper.recorded_kwargs.update(kwargs)
+
+    config = SB3PipelineConfigReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    ).to_config()
+
+    config.vec_config.vec_env_cls = DummyVecEnv
+    config.vec_config.n_envs = 1
+    config.wrapper_config = WrapperConfig(
+        wrapper_class=KwargRecorderWrapper,
+        wrapper_kwargs={"max_steps": 10, "base_param": "foo"},
+    )
+
+    db_path = tmp_path / "wrapper_study.db"
+    config.optuna_config = SB3OptunaConfig(
+        storage_url=f"sqlite:///{db_path}",
+        study_name="wrapper_optuna_test",
+        n_trials=1,
+        n_jobs=1,
+        n_startup_trials=1,
+        n_warmup_steps=0,
+        n_evaluations=1,
+        n_eval_episodes=1,
+        total_timesteps=32,
+        tune_params=[
+            SB3OptunaParamConfig(
+                name="max_steps",
+                target="wrapper_kwargs.max_steps",
+                suggest_type="categorical",
+                choices=[42],
+            )
+        ],
+        dashboard=SB3OptunaDashboardConfig(launch=False),
+    )
+
+    pipeline = SB3Pipeline(config=config, verbose=False)
+    study = pipeline.optimize()
+
+    assert study.trials[0].params["max_steps"] == 42
+    assert KwargRecorderWrapper.recorded_kwargs.get("max_steps") == 42
+    assert KwargRecorderWrapper.recorded_kwargs.get("base_param") == "foo"
+
+    # Test export_best_params
+    summary_path = tmp_path / "best.yaml"
+    best_summary = pipeline.export_best_params(study, out_path=summary_path)
+    assert best_summary["best_params"]["max_steps"] == 42
+    assert summary_path.exists()

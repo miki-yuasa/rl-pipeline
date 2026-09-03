@@ -1,3 +1,4 @@
+from copy import deepcopy
 """YAML-to-runtime configuration readers for the SB3 pipeline.
 
 Readers in this module deserialize YAML-friendly structures and resolve
@@ -709,6 +710,29 @@ SB3PipelineConfigReaderType = TypeVar(
 )
 
 
+
+def _format_templates_recursive(
+    data: Any,
+    replicate_signature: str,
+    rep_id: int,
+) -> Any:
+    """Format template variables recursively in strings, dicts, and lists."""
+    if isinstance(data, str):
+        try:
+            return data.format(replicate_signature=replicate_signature, rep_id=rep_id)
+        except (KeyError, IndexError, ValueError):
+            return data
+    if isinstance(data, dict):
+        return {
+            k: _format_templates_recursive(v, replicate_signature, rep_id)
+            for k, v in data.items()
+        }
+    if isinstance(data, list):
+        return [
+            _format_templates_recursive(v, replicate_signature, rep_id) for v in data
+        ]
+    return data
+
 class SB3ReplicatePipelineConfigReader(
     BaseModel,
     ConfigReader[SB3ReplicatePipelineConfig],
@@ -730,6 +754,11 @@ class SB3ReplicatePipelineConfigReader(
         """
         replicate_pipeline_configs: list[SB3PipelineConfig] = []
         for rep_id in range(self.replicate_config.num_replicates):
+            actual_rep_id = rep_id + self.replicate_config.replicate_start_id
+            rep_signature = self.replicate_config.replicate_signature.format(
+                rep_id=actual_rep_id
+            )
+
             device: str = (
                 self.single_pipeline_config.device
                 if isinstance(self.single_pipeline_config.device, str)
@@ -737,17 +766,32 @@ class SB3ReplicatePipelineConfigReader(
             )
 
             env_config: MakeEnvConfig = self.single_pipeline_config._to_env_config()
-            wrapper_config: WrapperConfig | None = (
-                self.single_pipeline_config._to_wrapper_config()
-            )
+            try:
+                wrapper_config: WrapperConfig | None = (
+                    self.single_pipeline_config._to_wrapper_config(
+                        replicate_signature=rep_signature
+                    )
+                )
+            except TypeError:
+                wrapper_config = (
+                    self.single_pipeline_config._to_wrapper_config()
+                )
+
+            if wrapper_config is not None and wrapper_config.wrapper_kwargs:
+                formatted_kwargs = _format_templates_recursive(
+                    deepcopy(wrapper_config.wrapper_kwargs),
+                    replicate_signature=rep_signature,
+                    rep_id=actual_rep_id,
+                )
+                wrapper_config = WrapperConfig(
+                    wrapper_class=wrapper_config.wrapper_class,
+                    wrapper_kwargs=formatted_kwargs,
+                )
 
             model_config_reader: SB3ModelConfigReader = (
                 self.single_pipeline_config._to_model_config_reader()
             )
 
-            rep_signature = self.replicate_config.replicate_signature.format(
-                rep_id=rep_id + self.replicate_config.replicate_start_id
-            )
             save_config: SaveConfig = self.single_pipeline_config._to_save_config(
                 replicate_signature=rep_signature
             )
@@ -755,6 +799,17 @@ class SB3ReplicatePipelineConfigReader(
             model_config: SB3ModelConfig = model_config_reader.to_config(
                 save_config=save_config
             )
+
+            # Assign deterministic distinct seeds for each replicate
+            base_seed = model_config.algo_config.algo_kwargs.get("seed")
+            if base_seed is None and model_config.vec_config:
+                base_seed = model_config.vec_config.seed
+            if base_seed is None:
+                base_seed = 10
+            rep_seed = int(base_seed) + rep_id * 10
+            model_config.algo_config.algo_kwargs["seed"] = rep_seed
+            if model_config.vec_config:
+                model_config.vec_config.seed = rep_seed
 
             experiment_manager_config: SB3ExperimentManagerConfig | None = (
                 self.single_pipeline_config._to_manager_config(

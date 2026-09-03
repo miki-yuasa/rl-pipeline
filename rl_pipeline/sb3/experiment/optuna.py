@@ -104,3 +104,34 @@ def _set_nested_value(target: dict[str, Any], dotted_key: str, value: Any) -> No
             node[key] = {}
         node = node[key]
     node[keys[-1]] = value
+
+
+def deep_update(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    """Recursively update nested dictionaries."""
+    for key, value in source.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            deep_update(target[key], value)
+        else:
+            target[key] = value
+    return target
+
+
+def split_sampled_params(
+    sampled_params: dict[str, Any],
+    base_wrapper_kwargs: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split sampled parameters into algorithm kwargs and wrapper kwargs."""
+    algo_kwargs: dict[str, Any] = {}
+    wrapper_kwargs: dict[str, Any] = {}
+
+    for key, value in sampled_params.items():
+        if key in ("wrapper", "wrapper_kwargs") and isinstance(value, dict):
+            deep_update(wrapper_kwargs, value)
+        elif key in ("algo", "algo_kwargs") and isinstance(value, dict):
+            deep_update(algo_kwargs, value)
+        elif base_wrapper_kwargs and key in base_wrapper_kwargs:
+            wrapper_kwargs[key] = value
+        else:
+            algo_kwargs[key] = value
+
+    return algo_kwargs, wrapper_kwargs
