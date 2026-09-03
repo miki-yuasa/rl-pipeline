@@ -443,3 +443,56 @@ def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
     best_summary = pipeline.export_best_params(study, out_path=summary_path)
     assert best_summary["best_params"]["max_steps"] == 42
     assert summary_path.exists()
+
+
+def test_trial_loss_callback_and_minimization(tmp_path: Path):
+    from unittest.mock import MagicMock
+    from rl_pipeline.sb3.callback import TrialLossCallback
+    import optuna
+
+    mock_trial = MagicMock()
+    mock_trial.should_prune.return_value = False
+
+    cb = TrialLossCallback(trial=mock_trial, metric="loss/total", eval_freq=2)
+    cb.locals = {"stats": {"loss/total": 0.25}}
+    cb.n_calls = 2
+    res = cb._on_step()
+
+    assert res is True
+    assert cb.last_loss == 0.25
+    mock_trial.report.assert_called_with(0.25, 1)
+
+    # Test pipeline optimization with loss minimization
+    config = SB3PipelineConfigReader.from_yaml("tests/sb3/assets/configs/cartpole_pipeline_config.yaml").to_config()
+    config.learn_config.total_timesteps = 32
+    config.vec_config.n_envs = 1
+
+    db_path = tmp_path / "loss_study.db"
+    config.optuna_config = SB3OptunaConfig(
+        storage_url=f"sqlite:///{db_path}",
+        study_name="loss_optuna_test",
+        direction="minimize",
+        metric="train/loss",
+        n_trials=1,
+        n_jobs=1,
+        n_startup_trials=1,
+        n_warmup_steps=0,
+        n_evaluations=1,
+        total_timesteps=32,
+        tune_params=[
+            SB3OptunaParamConfig(
+                name="learning_rate",
+                target="algo_kwargs.learning_rate",
+                suggest_type="float",
+                low=1e-4,
+                high=1e-3,
+            )
+        ],
+        dashboard=SB3OptunaDashboardConfig(launch=False),
+    )
+
+    pipeline = SB3Pipeline(config=config, verbose=False)
+    study = pipeline.optimize()
+    assert study.direction == optuna.study.StudyDirection.MINIMIZE
+    assert len(study.trials) == 1
+    assert "learning_rate" in study.best_params

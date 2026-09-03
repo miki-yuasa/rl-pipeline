@@ -285,6 +285,72 @@ class TrialEvalCallback(SuccessEvalCallback):
         return continue_training
 
 
+class TrialLossCallback(BaseCallback):
+    """Callback that tracks an optimization loss and supports Optuna pruning."""
+
+    def __init__(
+        self,
+        trial: "optuna.Trial",
+        metric: str = "loss/total",
+        eval_freq: int = 1000,
+        verbose: int = 0,
+    ) -> None:
+        super().__init__(verbose=verbose)
+        self.trial = trial
+        self.metric = metric
+        self.eval_freq = eval_freq
+        self.eval_idx = 0
+        self.is_pruned = False
+        self.last_loss: float | None = None
+        self._recent_losses: list[float] = []
+
+    def _extract_metric(self) -> float | None:
+        stats = self.locals.get("stats")
+        if isinstance(stats, dict) and self.metric in stats:
+            try:
+                return float(stats[self.metric])
+            except (TypeError, ValueError):
+                pass
+        if hasattr(self.model, "logger") and self.model.logger is not None:
+            name_to_val = getattr(self.model.logger, "name_to_value", {})
+            if self.metric in name_to_val:
+                try:
+                    return float(name_to_val[self.metric])
+                except (TypeError, ValueError):
+                    pass
+        return None
+
+    def _on_step(self) -> bool:
+        loss_val = self._extract_metric()
+        if loss_val is not None and not np.isnan(loss_val):
+            self._recent_losses.append(loss_val)
+
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            if self._recent_losses:
+                current_mean = float(np.mean(self._recent_losses))
+                self._recent_losses.clear()
+            else:
+                current_mean = loss_val if loss_val is not None else float("inf")
+
+            self.last_loss = current_mean
+            self.eval_idx += 1
+            self.trial.report(self.last_loss, self.eval_idx)
+            if self.trial.should_prune():
+                self.is_pruned = True
+                return False
+
+        return True
+
+    def _on_training_end(self) -> None:
+        if self.last_loss is None:
+            if self._recent_losses:
+                self.last_loss = float(np.mean(self._recent_losses))
+            else:
+                final_val = self._extract_metric()
+                if final_val is not None:
+                    self.last_loss = final_val
+
+
 class EvalCallbackConfig(BaseModel):
     """
     Configuration for the Stable Baselines3 evaluation callback.

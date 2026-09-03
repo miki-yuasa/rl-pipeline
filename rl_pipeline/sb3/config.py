@@ -340,6 +340,7 @@ class SB3OptunaConfig(BaseModel):
     storage_url: str | None = None
     study_name: str | None = None
     direction: Literal["maximize", "minimize"] = "maximize"
+    metric: str = "mean_reward"
     n_trials: int = Field(ge=1, default=50)
     timeout: int | None = Field(default=None, ge=1)
     n_jobs: int = Field(ge=1, default=1)

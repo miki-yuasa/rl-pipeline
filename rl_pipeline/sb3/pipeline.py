@@ -25,7 +25,7 @@ from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .callback import TrialEvalCallback, VideoRecorderCallback
+from .callback import TrialEvalCallback, TrialLossCallback, VideoRecorderCallback
 from .config import (
     SB3CallbackConfig,
     SB3LearnConfig,
@@ -678,23 +678,32 @@ class SB3Pipeline(
                 else:
                     trial_env_loader = self.env_loader
 
+                is_loss_metric = tune_config.metric != "mean_reward"
                 train_env = trial_env_loader.vec_env()
-                eval_env = trial_env_loader.vec_env()
+                if is_loss_metric:
+                    eval_env = None
+                    eval_callback = TrialLossCallback(
+                        trial=trial,
+                        metric=tune_config.metric,
+                        eval_freq=eval_freq,
+                        verbose=0,
+                    )
+                else:
+                    eval_env = trial_env_loader.vec_env()
+                    eval_callback = TrialEvalCallback(
+                        eval_env=eval_env,
+                        trial=trial,
+                        n_eval_episodes=tune_config.n_eval_episodes,
+                        eval_freq=eval_freq,
+                        best_model_save_path=trial_artifact_dir,
+                        deterministic=tune_config.deterministic_eval,
+                        verbose=0,
+                    )
                 model = algo_class(
                     **trial_algo_kwargs,
                     env=train_env,
                     tensorboard_log=self.save_config.tb_save_dir,
                     device=self.config.device,
-                )
-
-                eval_callback = TrialEvalCallback(
-                    eval_env=eval_env,
-                    trial=trial,
-                    n_eval_episodes=tune_config.n_eval_episodes,
-                    eval_freq=eval_freq,
-                    best_model_save_path=trial_artifact_dir,
-                    deterministic=tune_config.deterministic_eval,
-                    verbose=0,
                 )
 
                 learn_kwargs = self.learn_config.model_dump()
@@ -724,9 +733,14 @@ class SB3Pipeline(
                 if eval_callback.is_pruned:
                     raise optuna.exceptions.TrialPruned()
 
-                if eval_callback.last_mean_reward is None:
-                    return float("-inf")
-                return float(eval_callback.last_mean_reward)
+                if is_loss_metric:
+                    if eval_callback.last_loss is None:
+                        return float("inf") if tune_config.direction == "minimize" else float("-inf")
+                    return float(eval_callback.last_loss)
+                else:
+                    if eval_callback.last_mean_reward is None:
+                        return float("-inf") if tune_config.direction == "maximize" else float("inf")
+                    return float(eval_callback.last_mean_reward)
 
             finally:
                 if model is not None and model.env is not None:
