@@ -52,6 +52,10 @@ def make_vec_env(
 
     def make_env(rank: int) -> Callable[[], gym.Env]:
         def _init() -> gym.Env:
+            try:
+                import contgrid  # noqa: F401
+            except ImportError:
+                pass
             # For type checker:
             assert monitor_kwargs is not None
             assert wrapper_kwargs is not None
