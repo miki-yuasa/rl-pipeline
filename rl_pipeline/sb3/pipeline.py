@@ -7,10 +7,11 @@ optimization through ``SB3Pipeline.optimize``.
 
 import multiprocessing as mp
 import os
-from pathlib import Path
 import subprocess
+from collections.abc import Callable
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from gymnasium import Env, Wrapper
@@ -33,7 +34,7 @@ from .config import (
     SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
 )
-from .experiment import SB3ExperimentManager
+from .experiment import SB3ExperimentManager, decode_trial_params
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .utils import SuccessBuffer, SuccessBufferEval, record_replay
 
@@ -666,6 +667,7 @@ class SB3Pipeline(
                         sampled_wrapper_kwargs,
                     )
                     from rl_pipeline.gymnasium import WrapperConfig
+
                     trial_wrapper_config = WrapperConfig(
                         wrapper_class=self.config.wrapper_config.wrapper_class,
                         wrapper_kwargs=trial_wrapper_kwargs,
@@ -735,11 +737,19 @@ class SB3Pipeline(
 
                 if is_loss_metric:
                     if eval_callback.last_loss is None:
-                        return float("inf") if tune_config.direction == "minimize" else float("-inf")
+                        return (
+                            float("inf")
+                            if tune_config.direction == "minimize"
+                            else float("-inf")
+                        )
                     return float(eval_callback.last_loss)
                 else:
                     if eval_callback.last_mean_reward is None:
-                        return float("-inf") if tune_config.direction == "maximize" else float("inf")
+                        return (
+                            float("-inf")
+                            if tune_config.direction == "maximize"
+                            else float("inf")
+                        )
                     return float(eval_callback.last_mean_reward)
 
             finally:
@@ -848,15 +858,24 @@ class SB3Pipeline(
         summary : dict[str, Any]
             Best trial statistics and parameter dictionary.
         """
-        import yaml
         from pathlib import Path
 
+        import yaml
+
         best_trial = study.best_trial
+        tune_params = (
+            self.config.optuna_config.tune_params if self.config.optuna_config else ()
+        )
+        best_params = (
+            decode_trial_params(best_trial.params, tune_params)
+            if tune_params
+            else best_trial.params
+        )
         summary = {
             "study_name": study.study_name,
             "best_value": study.best_value,
             "best_trial_number": best_trial.number,
-            "best_params": best_trial.params,
+            "best_params": best_params,
             "user_attrs": best_trial.user_attrs,
         }
         if out_path:

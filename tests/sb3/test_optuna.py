@@ -2,9 +2,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import optuna
-import torch.nn as nn
-from stable_baselines3.common.vec_env import DummyVecEnv
-
 from rl_pipeline.experiment.optuna import build_dashboard_command
 from rl_pipeline.sb3 import (
     SB3OptunaConfig,
@@ -17,6 +14,8 @@ from rl_pipeline.sb3.experiment.optuna import (
     filter_algorithm_kwargs,
     sample_params_from_config,
 )
+from stable_baselines3.common.vec_env import DummyVecEnv
+from torch import nn
 
 
 def test_filter_algorithm_kwargs_drops_unknown_values():
@@ -327,7 +326,9 @@ def test_split_sampled_params_and_deep_update():
         "wrapper": {"max_steps": 50},
         "algo_kwargs": {"batch_size": 512},
     }
-    algo, wrapper = split_sampled_params(sampled, base_wrapper_kwargs={"dense_scale": 1.0})
+    algo, wrapper = split_sampled_params(
+        sampled, base_wrapper_kwargs={"dense_scale": 1.0}
+    )
     assert algo == {"learning_rate": 1e-4, "batch_size": 512}
     assert wrapper == {"max_steps": 50}
 
@@ -340,13 +341,13 @@ def test_split_sampled_params_and_deep_update():
 
 
 def test_replicate_config_templates_and_seeds(tmp_path: Path):
+    import gymnasium as gym
     from rl_pipeline.core import ReplicateConfig
     from rl_pipeline.gymnasium.config import WrapperConfig
     from rl_pipeline.sb3.config_reader import (
         SB3PipelineConfigReader,
         SB3ReplicatePipelineConfigReader,
     )
-    import gymnasium as gym
 
     class DummyWrapper(gym.Wrapper):
         pass
@@ -365,7 +366,9 @@ def test_replicate_config_templates_and_seeds(tmp_path: Path):
         "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
     )
     reader = SB3ReplicatePipelineConfigReader[DummyPipelineReader](
-        replicate_config=ReplicateConfig(num_replicates=3, replicate_signature="rep_{rep_id}"),
+        replicate_config=ReplicateConfig(
+            num_replicates=3, replicate_signature="rep_{rep_id}"
+        ),
         single_pipeline_config=single_reader,
     )
 
@@ -374,26 +377,40 @@ def test_replicate_config_templates_and_seeds(tmp_path: Path):
 
     # Check template formatting
     assert (
-        replicate_config.ind_pipeline_configs[0].wrapper_config.wrapper_kwargs["model_path"]
+        replicate_config.ind_pipeline_configs[0].wrapper_config.wrapper_kwargs[
+            "model_path"
+        ]
         == "out/rep_0/model.zip"
     )
     assert (
-        replicate_config.ind_pipeline_configs[1].wrapper_config.wrapper_kwargs["model_path"]
+        replicate_config.ind_pipeline_configs[1].wrapper_config.wrapper_kwargs[
+            "model_path"
+        ]
         == "out/rep_1/model.zip"
     )
 
     # Check distinct seeds
-    assert replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] is not None
-    assert replicate_config.ind_pipeline_configs[1].algo_config.algo_kwargs["seed"] == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 10
-    assert replicate_config.ind_pipeline_configs[2].algo_config.algo_kwargs["seed"] == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 20
+    assert (
+        replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"]
+        is not None
+    )
+    assert (
+        replicate_config.ind_pipeline_configs[1].algo_config.algo_kwargs["seed"]
+        == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 10
+    )
+    assert (
+        replicate_config.ind_pipeline_configs[2].algo_config.algo_kwargs["seed"]
+        == replicate_config.ind_pipeline_configs[0].algo_config.algo_kwargs["seed"] + 20
+    )
 
 
 def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
-    from rl_pipeline.gymnasium.config import WrapperConfig
     import gymnasium as gym
+    from rl_pipeline.gymnasium.config import WrapperConfig
 
     class KwargRecorderWrapper(gym.Wrapper):
         recorded_kwargs = {}
+
         def __init__(self, env, **kwargs):
             super().__init__(env)
             KwargRecorderWrapper.recorded_kwargs.update(kwargs)
@@ -447,8 +464,9 @@ def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
 
 def test_trial_loss_callback_and_minimization(tmp_path: Path):
     from unittest.mock import MagicMock
-    from rl_pipeline.sb3.callback import TrialLossCallback
+
     import optuna
+    from rl_pipeline.sb3.callback import TrialLossCallback
 
     mock_trial = MagicMock()
     mock_trial.should_prune.return_value = False
@@ -463,7 +481,9 @@ def test_trial_loss_callback_and_minimization(tmp_path: Path):
     mock_trial.report.assert_called_with(0.25, 1)
 
     # Test pipeline optimization with loss minimization
-    config = SB3PipelineConfigReader.from_yaml("tests/sb3/assets/configs/cartpole_pipeline_config.yaml").to_config()
+    config = SB3PipelineConfigReader.from_yaml(
+        "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
+    ).to_config()
     config.learn_config.total_timesteps = 32
     config.vec_config.n_envs = 1
 
@@ -496,3 +516,55 @@ def test_trial_loss_callback_and_minimization(tmp_path: Path):
     assert study.direction == optuna.study.StudyDirection.MINIMIZE
     assert len(study.trials) == 1
     assert "learning_rate" in study.best_params
+
+
+def test_categorical_complex_choices_sampling_and_decoding(tmp_path: Path):
+    import warnings
+
+    from rl_pipeline.sb3.experiment.optuna import decode_trial_params
+
+    db_path = tmp_path / "complex_choices.db"
+    study = optuna.create_study(
+        storage=f"sqlite:///{db_path}",
+        study_name="complex_choices_test",
+    )
+    trial = study.ask()
+
+    tune_params = [
+        SB3OptunaParamConfig(
+            name="switch_threshold_range",
+            target="wrapper_kwargs.spec_rep_args.args.switch_threshold.range",
+            suggest_type="categorical",
+            choices=[[-30, 0], [-20, 10], [-5, 5]],
+        ),
+        SB3OptunaParamConfig(
+            name="activation",
+            target="policy_kwargs.activation",
+            suggest_type="categorical",
+            choices=["relu", "tanh"],
+            value_mapping={"relu": "mapped_relu", "tanh": "mapped_tanh"},
+        ),
+    ]
+
+    with warnings.catch_warnings(record=True) as recorded_warnings:
+        warnings.simplefilter("always")
+        sampled = sample_params_from_config(trial, tune_params)
+
+    optuna_warnings = [
+        w
+        for w in recorded_warnings
+        if issubclass(w.category, UserWarning)
+        and "Choices for a categorical distribution" in str(w.message)
+    ]
+    assert len(optuna_warnings) == 0
+
+    sampled_range = sampled["wrapper_kwargs"]["spec_rep_args"]["args"][
+        "switch_threshold"
+    ]["range"]
+    assert sampled_range in [[-30, 0], [-20, 10], [-5, 5]]
+    assert sampled["policy_kwargs"]["activation"] in ["mapped_relu", "mapped_tanh"]
+
+    study.tell(trial, 1.0)
+    decoded = decode_trial_params(study.best_params, tune_params)
+    assert decoded["switch_threshold_range"] in [[-30, 0], [-20, 10], [-5, 5]]
+    assert decoded["activation"] in ["mapped_relu", "mapped_tanh"]

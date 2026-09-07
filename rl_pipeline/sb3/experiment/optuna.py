@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import inspect
+import json
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import optuna
+from optuna.distributions import CategoricalChoiceType
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 if TYPE_CHECKING:
@@ -20,7 +25,7 @@ def filter_algorithm_kwargs(
 
 def sample_params_from_config(
     trial: optuna.trial.BaseTrial,
-    tune_params: list["SB3OptunaParamConfig"],
+    tune_params: Sequence[SB3OptunaParamConfig],
 ) -> dict[str, Any]:
     """Sample hyperparameters from declarative search-space config."""
     sampled: dict[str, Any] = {}
@@ -33,9 +38,62 @@ def sample_params_from_config(
     return sampled
 
 
+def _encode_choice(choice: Any) -> CategoricalChoiceType:
+    """Normalizes a choice into a primitive type supported by Optuna."""
+    if isinstance(choice, (type(None), bool, int, float, str)):
+        return choice
+    return json.dumps(choice, sort_keys=True)
+
+
+def _suggest_categorical(
+    trial: optuna.trial.BaseTrial,
+    param: SB3OptunaParamConfig,
+) -> Any:
+    """Suggests a categorical value, encoding non-primitives as JSON strings."""
+    if not param.choices:
+        raise ValueError(
+            f"categorical parameter '{param.name}' requires non-empty choices."
+        )
+
+    encoded_choices = [_encode_choice(c) for c in param.choices]
+    value_by_choice = dict(zip(encoded_choices, param.choices))
+
+    chosen = trial.suggest_categorical(param.name, encoded_choices)
+    raw_value = value_by_choice[chosen]
+
+    if param.value_mapping is None:
+        return raw_value
+    return param.value_mapping.get(str(chosen), raw_value)
+
+
+def decode_trial_params(
+    params: Mapping[str, Any],
+    tune_params: Sequence[SB3OptunaParamConfig],
+) -> dict[str, Any]:
+    """Decodes Optuna trial parameters back to original types from search space."""
+    param_by_name = {p.name: p for p in tune_params}
+    decoded: dict[str, Any] = {}
+
+    for name, raw_val in params.items():
+        param = param_by_name.get(name)
+        if param is None or param.suggest_type != "categorical" or not param.choices:
+            decoded[name] = raw_val
+            continue
+
+        value_by_choice = {_encode_choice(c): c for c in param.choices}
+        raw_choice = value_by_choice.get(raw_val, raw_val)
+
+        if param.value_mapping is not None:
+            decoded[name] = param.value_mapping.get(str(raw_val), raw_choice)
+        else:
+            decoded[name] = raw_choice
+
+    return decoded
+
+
 def _suggest_param(
     trial: optuna.trial.BaseTrial,
-    param: "SB3OptunaParamConfig",
+    param: SB3OptunaParamConfig,
 ) -> Any:
     suggest_type = param.suggest_type
 
@@ -70,15 +128,7 @@ def _suggest_param(
         )
         value = 2**exponent
     elif suggest_type == "categorical":
-        if not param.choices:
-            raise ValueError(
-                f"categorical parameter '{param.name}' requires non-empty choices"
-            )
-        choice = trial.suggest_categorical(param.name, param.choices)
-        if param.value_mapping is not None:
-            value = param.value_mapping.get(str(choice), choice)
-        else:
-            value = choice
+        value = _suggest_categorical(trial=trial, param=param)
     else:
         raise ValueError(f"Unsupported suggest_type: {suggest_type}")
 
