@@ -85,131 +85,132 @@ class SuccessEvalCallback(EvalCallback):
         )
         self.evaluations_failures: list[list[bool]] = []
 
-    def _on_step(self) -> bool:
+    def _evaluate(self) -> bool:
+        """Executes evaluation on eval_env and logs metrics."""
         continue_training = True
 
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            # Sync training and eval env if there is VecNormalize
-            if self.model.get_vec_normalize_env() is not None:
-                try:
-                    sync_envs_normalization(self.training_env, self.eval_env)
-                except AttributeError as e:
-                    raise AssertionError(
-                        "Training and eval env are not wrapped the same way, "
-                        "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
-                        "and warning above."
-                    ) from e
+        # Sync training and eval env if there is VecNormalize
+        if self.model.get_vec_normalize_env() is not None:
+            try:
+                sync_envs_normalization(self.training_env, self.eval_env)
+            except AttributeError as e:
+                raise AssertionError(
+                    "Training and eval env are not wrapped the same way, "
+                    "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+                    "and warning above."
+                ) from e
 
-            # Reset success rate buffer
-            self.success_buffer: SuccessBuffer = SuccessBuffer()
+        # Reset success rate buffer
+        self.success_buffer: SuccessBuffer = SuccessBuffer()
 
-            episode_rewards, episode_lengths = evaluate_policy(
-                self.model,
-                self.eval_env,
-                n_eval_episodes=self.n_eval_episodes,
-                render=self.render,
-                deterministic=self.deterministic,
-                return_episode_rewards=True,
-                warn=self.warn,
-                callback=self.success_buffer._log_success_callback,
-            )
+        episode_rewards, episode_lengths = evaluate_policy(
+            self.model,
+            self.eval_env,
+            n_eval_episodes=self.n_eval_episodes,
+            render=self.render,
+            deterministic=self.deterministic,
+            return_episode_rewards=True,
+            warn=self.warn,
+            callback=self.success_buffer._log_success_callback,
+        )
 
-            success_buffer_result: SuccessBufferEval = self.success_buffer.post_eval()
+        success_buffer_result: SuccessBufferEval = self.success_buffer.post_eval()
 
-            if self.log_path is not None:
-                assert isinstance(episode_rewards, list)
-                assert isinstance(episode_lengths, list)
-                self.evaluations_timesteps.append(self.num_timesteps)
-                self.evaluations_results.append(episode_rewards)
-                self.evaluations_length.append(episode_lengths)
+        if self.log_path is not None:
+            assert isinstance(episode_rewards, list)
+            assert isinstance(episode_lengths, list)
+            self.evaluations_timesteps.append(self.num_timesteps)
+            self.evaluations_results.append(episode_rewards)
+            self.evaluations_length.append(episode_lengths)
 
-                kwargs = {}
-                # Save success log if present
-                if len(success_buffer_result.episode_successes) > 0:
-                    self.evaluations_successes.append(
-                        success_buffer_result.episode_successes
-                    )
-                    kwargs = dict(successes=self.evaluations_successes)
-
-                # Save failures log if present
-                if len(success_buffer_result.episode_failures) > 0:
-                    self.evaluations_failures.append(
-                        success_buffer_result.episode_failures
-                    )
-                    kwargs = dict(failures=self.evaluations_failures)
-
-                np.savez(
-                    self.log_path,
-                    timesteps=self.evaluations_timesteps,
-                    results=self.evaluations_results,
-                    ep_lengths=self.evaluations_length,
-                    **kwargs,  # type: ignore[arg-type]
+            kwargs = {}
+            # Save success log if present
+            if len(success_buffer_result.episode_successes) > 0:
+                self.evaluations_successes.append(
+                    success_buffer_result.episode_successes
                 )
+                kwargs = {"successes": self.evaluations_successes}
 
-            mean_reward, std_reward = np.mean(episode_rewards), np.std(episode_rewards)
-            mean_ep_length, std_ep_length = (
-                np.mean(episode_lengths),
-                np.std(episode_lengths),
+            # Save failures log if present
+            if len(success_buffer_result.episode_failures) > 0:
+                self.evaluations_failures.append(success_buffer_result.episode_failures)
+                kwargs = {"failures": self.evaluations_failures}
+
+            np.savez(
+                self.log_path,
+                timesteps=self.evaluations_timesteps,
+                results=self.evaluations_results,
+                ep_lengths=self.evaluations_length,
+                **kwargs,  # type: ignore[arg-type]
             )
-            self.last_mean_reward = float(mean_reward)
 
+        mean_reward, std_reward = np.mean(episode_rewards), np.std(episode_rewards)
+        mean_ep_length, std_ep_length = (
+            np.mean(episode_lengths),
+            np.std(episode_lengths),
+        )
+        self.last_mean_reward = float(mean_reward)
+
+        if self.verbose >= 1:
+            print(
+                f"Eval num_timesteps={self.num_timesteps}, "
+                f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
+            )
+            print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
+        # Add to current Logger
+        self.logger.record("eval/mean_reward", float(mean_reward))
+        self.logger.record("eval/mean_ep_length", mean_ep_length)
+
+        if success_buffer_result.success_rate:
+            success_rate: float = success_buffer_result.success_rate
+            if self.verbose >= 1:
+                print(f"Success rate: {100 * success_rate:.2f}%")
+            self.logger.record("eval/success_rate", success_rate)
+
+        for (
+            goal_name,
+            goal_success_rate,
+        ) in success_buffer_result.goal_success_rates.items():
             if self.verbose >= 1:
                 print(
-                    f"Eval num_timesteps={self.num_timesteps}, "
-                    f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
+                    f"Goal success rate [{goal_name}]: {100 * goal_success_rate:.2f}%"
                 )
-                print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
-            # Add to current Logger
-            self.logger.record("eval/mean_reward", float(mean_reward))
-            self.logger.record("eval/mean_ep_length", mean_ep_length)
-
-            if success_buffer_result.success_rate:
-                success_rate: float = success_buffer_result.success_rate
-                if self.verbose >= 1:
-                    print(f"Success rate: {100 * success_rate:.2f}%")
-                self.logger.record("eval/success_rate", success_rate)
-
-            for (
-                goal_name,
-                goal_success_rate,
-            ) in success_buffer_result.goal_success_rates.items():
-                if self.verbose >= 1:
-                    print(
-                        f"Goal success rate [{goal_name}]: {100 * goal_success_rate:.2f}%"
-                    )
-                self.logger.record(
-                    f"eval_goal_success_rates/{goal_name}", goal_success_rate
-                )
-
-            if success_buffer_result.failure_rate:
-                failure_rate: float = success_buffer_result.failure_rate
-                if self.verbose >= 1:
-                    print(f"Failure rate: {100 * failure_rate:.2f}%")
-                self.logger.record("eval/failure_rate", failure_rate)
-
-            # Dump log so the evaluation results are printed with the correct timestep
             self.logger.record(
-                "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
+                f"eval_goal_success_rates/{goal_name}", goal_success_rate
             )
-            self.logger.dump(self.num_timesteps)
 
-            if mean_reward > self.best_mean_reward:
-                if self.verbose >= 1:
-                    print("New best mean reward!")
-                if self.best_model_save_path is not None:
-                    self.model.save(
-                        os.path.join(self.best_model_save_path, "best_model")
-                    )
-                self.best_mean_reward = float(mean_reward)
-                # Trigger callback on new best model, if needed
-                if self.callback_on_new_best is not None:
-                    continue_training = self.callback_on_new_best.on_step()
+        if success_buffer_result.failure_rate:
+            failure_rate: float = success_buffer_result.failure_rate
+            if self.verbose >= 1:
+                print(f"Failure rate: {100 * failure_rate:.2f}%")
+            self.logger.record("eval/failure_rate", failure_rate)
 
-            # Trigger callback after every evaluation, if needed
-            if self.callback is not None:
-                continue_training = continue_training and self._on_event()
+        # Dump log so the evaluation results are printed with the correct timestep
+        self.logger.record(
+            "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
+        )
+        self.logger.dump(self.num_timesteps)
+
+        if mean_reward > self.best_mean_reward:
+            if self.verbose >= 1:
+                print("New best mean reward!")
+            if self.best_model_save_path is not None:
+                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+            self.best_mean_reward = float(mean_reward)
+            # Trigger callback on new best model, if needed
+            if self.callback_on_new_best is not None:
+                continue_training = self.callback_on_new_best.on_step()
+
+        # Trigger callback after every evaluation, if needed
+        if self.callback is not None:
+            continue_training = continue_training and self._on_event()
 
         return continue_training
+
+    def _on_step(self) -> bool:
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            return self._evaluate()
+        return True
 
 
 class VideoRecorderCallback(BaseCallback):
@@ -273,16 +274,35 @@ class TrialEvalCallback(SuccessEvalCallback):
         self.trial = trial
         self.eval_idx = 0
         self.is_pruned = False
+        self.last_eval_timesteps: int = 0
+
+    def _should_eval(self) -> bool:
+        if self.eval_freq <= 0:
+            return False
+        timestep_triggered = (
+            self.num_timesteps > 0
+            and (self.num_timesteps - self.last_eval_timesteps) >= self.eval_freq
+        )
+        call_triggered = self.n_calls > 0 and self.n_calls % self.eval_freq == 0
+        return timestep_triggered or call_triggered
 
     def _on_step(self) -> bool:
-        continue_training = super()._on_step()
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+        if self._should_eval():
+            self.last_eval_timesteps = self.num_timesteps
+            continue_training = self._evaluate()
             self.eval_idx += 1
             self.trial.report(self.last_mean_reward, self.eval_idx)
             if self.trial.should_prune():
                 self.is_pruned = True
                 return False
-        return continue_training
+            return continue_training
+        return True
+
+    def _on_training_end(self) -> None:
+        if self.last_mean_reward is None or self.last_mean_reward == -np.inf:
+            self._evaluate()
+            self.eval_idx += 1
+            self.trial.report(self.last_mean_reward, self.eval_idx)
 
 
 class TrialLossCallback(BaseCallback):
@@ -303,6 +323,17 @@ class TrialLossCallback(BaseCallback):
         self.is_pruned = False
         self.last_loss: float | None = None
         self._recent_losses: list[float] = []
+        self.last_eval_timesteps: int = 0
+
+    def _should_eval(self) -> bool:
+        if self.eval_freq <= 0:
+            return False
+        timestep_triggered = (
+            self.num_timesteps > 0
+            and (self.num_timesteps - self.last_eval_timesteps) >= self.eval_freq
+        )
+        call_triggered = self.n_calls > 0 and self.n_calls % self.eval_freq == 0
+        return timestep_triggered or call_triggered
 
     def _extract_metric(self) -> float | None:
         stats = self.locals.get("stats")
@@ -325,7 +356,8 @@ class TrialLossCallback(BaseCallback):
         if loss_val is not None and not np.isnan(loss_val):
             self._recent_losses.append(loss_val)
 
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+        if self._should_eval():
+            self.last_eval_timesteps = self.num_timesteps
             if self._recent_losses:
                 current_mean = float(np.mean(self._recent_losses))
                 self._recent_losses.clear()

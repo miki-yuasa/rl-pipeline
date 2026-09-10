@@ -4,7 +4,8 @@ This module defines strongly typed Pydantic models used by the SB3 pipeline.
 It includes model/training/callback settings and Optuna-related tuning settings.
 """
 
-from typing import Any, Callable, Literal
+from collections.abc import Callable
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -329,6 +330,8 @@ class SB3OptunaConfig(BaseModel):
         Whether evaluation uses deterministic actions.
     total_timesteps : int | None
         Optional per-trial timestep override.
+    eval_freq : int | None
+        Optional explicit evaluation interval in timesteps.
     sample_params_fn : Callable[[Any], dict[str, Any]] | None
         Optional custom sampling callable.
     tune_params : list[SB3OptunaParamConfig]
@@ -351,6 +354,7 @@ class SB3OptunaConfig(BaseModel):
     n_eval_episodes: int = Field(ge=1, default=3)
     deterministic_eval: bool = False
     total_timesteps: int | None = Field(default=None, ge=1)
+    eval_freq: int | None = Field(default=None, ge=1)
     sample_params_fn: Callable[[Any], dict[str, Any]] | None = None
     tune_params: list[SB3OptunaParamConfig] = Field(default_factory=list)
     dashboard: SB3OptunaDashboardConfig = SB3OptunaDashboardConfig()

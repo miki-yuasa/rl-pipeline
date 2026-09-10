@@ -405,11 +405,13 @@ def test_replicate_config_templates_and_seeds(tmp_path: Path):
 
 
 def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
+    from typing import Any, ClassVar
+
     import gymnasium as gym
     from rl_pipeline.gymnasium.config import WrapperConfig
 
     class KwargRecorderWrapper(gym.Wrapper):
-        recorded_kwargs = {}
+        recorded_kwargs: ClassVar[dict[str, Any]] = {}
 
         def __init__(self, env, **kwargs):
             super().__init__(env)
@@ -485,6 +487,7 @@ def test_trial_loss_callback_and_minimization(tmp_path: Path):
         "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
     ).to_config()
     config.learn_config.total_timesteps = 32
+    config.vec_config.vec_env_cls = DummyVecEnv
     config.vec_config.n_envs = 1
 
     db_path = tmp_path / "loss_study.db"
@@ -568,3 +571,66 @@ def test_categorical_complex_choices_sampling_and_decoding(tmp_path: Path):
     decoded = decode_trial_params(study.best_params, tune_params)
     assert decoded["switch_threshold_range"] in [[-30, 0], [-20, 10], [-5, 5]]
     assert decoded["activation"] in ["mapped_relu", "mapped_tanh"]
+
+
+def test_trial_eval_callback_timestep_triggering():
+    from unittest.mock import MagicMock
+
+    from rl_pipeline.sb3.callback import TrialEvalCallback
+    from stable_baselines3.common.vec_env import VecEnv
+
+    mock_trial = MagicMock()
+    mock_trial.should_prune.return_value = False
+    mock_env = MagicMock(spec=VecEnv)
+
+    cb = TrialEvalCallback(
+        eval_env=mock_env,
+        trial=mock_trial,
+        eval_freq=1000,
+    )
+    cb._evaluate = MagicMock(return_value=True)
+    cb.last_mean_reward = 42.0
+
+    # Step 1: 500 timesteps, should not trigger eval
+    cb.n_calls = 1
+    cb.num_timesteps = 500
+    res = cb._on_step()
+    assert res is True
+    assert cb._evaluate.call_count == 0
+
+    # Step 2: 1100 timesteps, exceeds eval_freq (1000), should trigger eval
+    cb.n_calls = 2
+    cb.num_timesteps = 1100
+    res = cb._on_step()
+    assert res is True
+    assert cb._evaluate.call_count == 1
+    assert cb.last_eval_timesteps == 1100
+    mock_trial.report.assert_called_with(42.0, 1)
+
+
+def test_trial_eval_callback_on_training_end_fallback():
+    from unittest.mock import MagicMock
+
+    import numpy as np
+    from rl_pipeline.sb3.callback import TrialEvalCallback
+    from stable_baselines3.common.vec_env import VecEnv
+
+    mock_trial = MagicMock()
+    mock_env = MagicMock(spec=VecEnv)
+
+    cb = TrialEvalCallback(
+        eval_env=mock_env,
+        trial=mock_trial,
+        eval_freq=10_000,
+    )
+    cb.last_mean_reward = -np.inf
+
+    def fake_eval():
+        cb.last_mean_reward = 25.0
+        return True
+
+    cb._evaluate = MagicMock(side_effect=fake_eval)
+
+    cb._on_training_end()
+    assert cb._evaluate.call_count == 1
+    mock_trial.report.assert_called_with(25.0, 1)

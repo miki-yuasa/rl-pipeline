@@ -416,7 +416,7 @@ class SB3Pipeline(
             print(f"SB3Pipeline: Evaluating the {checkpoint} model...")
 
         model: PolicyPredictor
-        if isinstance(checkpoint, int) or isinstance(checkpoint, str):
+        if isinstance(checkpoint, (int, str)):
             model = self.load_model(ckpt_timestep=checkpoint)
         else:
             model = checkpoint
@@ -613,8 +613,11 @@ class SB3Pipeline(
             if tune_config.total_timesteps is not None
             else self.learn_config.total_timesteps
         )
-        n_envs = self.config.vec_config.n_envs if self.config.vec_config else 1
-        eval_freq = max(total_timesteps // tune_config.n_evaluations // n_envs, 1)
+        eval_freq = (
+            tune_config.eval_freq
+            if tune_config.eval_freq is not None
+            else max(total_timesteps // tune_config.n_evaluations, 1)
+        )
 
         def objective(trial: optuna.Trial) -> float:
             """Objective function executed by Optuna for one trial.
@@ -743,7 +746,10 @@ class SB3Pipeline(
                         )
                     return float(eval_callback.last_loss)
                 else:
-                    if eval_callback.last_mean_reward is None:
+                    if (
+                        eval_callback.last_mean_reward is None
+                        or eval_callback.last_mean_reward == -np.inf
+                    ):
                         return (
                             float("-inf")
                             if tune_config.direction == "maximize"
