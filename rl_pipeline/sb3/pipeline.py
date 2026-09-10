@@ -570,16 +570,15 @@ class SB3Pipeline(
             n_warmup_steps=tune_config.n_warmup_steps,
         )
 
-        if tune_config.dashboard.launch:
-            if (
-                self.optuna_dashboard_process is None
-                or self.optuna_dashboard_process.poll() is not None
-            ):
-                self.optuna_dashboard_process = launch_dashboard(
-                    storage_url=storage_url,
-                    host=tune_config.dashboard.host,
-                    port=tune_config.dashboard.port,
-                )
+        if tune_config.dashboard.launch and (
+            self.optuna_dashboard_process is None
+            or self.optuna_dashboard_process.poll() is not None
+        ):
+            self.optuna_dashboard_process = launch_dashboard(
+                storage_url=storage_url,
+                host=tune_config.dashboard.host,
+                port=tune_config.dashboard.port,
+            )
 
         if tune_config.tune_params:
 
