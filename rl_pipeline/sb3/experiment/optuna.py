@@ -33,7 +33,7 @@ def sample_params_from_config(
     for param in tune_params:
         target_key = param.target or param.name
         value = _suggest_param(trial=trial, param=param)
-        _set_nested_value(sampled, target_key, value)
+        set_nested_value(sampled, target_key, value)
 
     _validate_sampled_ranges(sampled)
     return sampled
@@ -161,7 +161,14 @@ def _suggest_param(
     return value
 
 
-def _set_nested_value(target: dict[str, Any], dotted_key: str, value: Any) -> None:
+def set_nested_value(target: dict[str, Any], dotted_key: str, value: Any) -> None:
+    """Set a value in a nested dictionary, supporting 2-element range indices (.0 and .1).
+
+    Args:
+      target: Destination dictionary to mutate.
+      dotted_key: Dotted key path, optionally including bracket/index notation.
+      value: Value to set at the destination path.
+    """
     normalized_key = dotted_key.replace("[", ".").replace("]", "")
     if "." not in normalized_key:
         target[normalized_key] = value

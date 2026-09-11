@@ -44,6 +44,7 @@ from .experiment import (
     decode_trial_params,
     filter_algorithm_kwargs,
     sample_params_from_config,
+    set_nested_value,
 )
 from .loader import SB3EnvLoader, SB3ModelLoader
 from .pipeline import SB3Pipeline, SB3ReplicatePipeline
@@ -92,4 +93,5 @@ __all__ = [
     "decode_trial_params",
     "filter_algorithm_kwargs",
     "sample_params_from_config",
+    "set_nested_value",
 ]
