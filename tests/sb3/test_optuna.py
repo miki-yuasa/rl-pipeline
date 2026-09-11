@@ -2,6 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import optuna
+from stable_baselines3.common.vec_env import DummyVecEnv
+from torch import nn
+
 from rl_pipeline.experiment.optuna import build_dashboard_command
 from rl_pipeline.sb3 import (
     SB3OptunaConfig,
@@ -14,8 +17,6 @@ from rl_pipeline.sb3.experiment.optuna import (
     filter_algorithm_kwargs,
     sample_params_from_config,
 )
-from stable_baselines3.common.vec_env import DummyVecEnv
-from torch import nn
 
 
 def test_filter_algorithm_kwargs_drops_unknown_values():
@@ -342,6 +343,7 @@ def test_split_sampled_params_and_deep_update():
 
 def test_replicate_config_templates_and_seeds(tmp_path: Path):
     import gymnasium as gym
+
     from rl_pipeline.core import ReplicateConfig
     from rl_pipeline.gymnasium.config import WrapperConfig
     from rl_pipeline.sb3.config_reader import (
@@ -408,6 +410,7 @@ def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
     from typing import Any, ClassVar
 
     import gymnasium as gym
+
     from rl_pipeline.gymnasium.config import WrapperConfig
 
     class KwargRecorderWrapper(gym.Wrapper):
@@ -468,6 +471,7 @@ def test_trial_loss_callback_and_minimization(tmp_path: Path):
     from unittest.mock import MagicMock
 
     import optuna
+
     from rl_pipeline.sb3.callback import TrialLossCallback
 
     mock_trial = MagicMock()
@@ -576,8 +580,9 @@ def test_categorical_complex_choices_sampling_and_decoding(tmp_path: Path):
 def test_trial_eval_callback_timestep_triggering():
     from unittest.mock import MagicMock
 
-    from rl_pipeline.sb3.callback import TrialEvalCallback
     from stable_baselines3.common.vec_env import VecEnv
+
+    from rl_pipeline.sb3.callback import TrialEvalCallback
 
     mock_trial = MagicMock()
     mock_trial.should_prune.return_value = False
@@ -612,8 +617,9 @@ def test_trial_eval_callback_on_training_end_fallback():
     from unittest.mock import MagicMock
 
     import numpy as np
-    from rl_pipeline.sb3.callback import TrialEvalCallback
     from stable_baselines3.common.vec_env import VecEnv
+
+    from rl_pipeline.sb3.callback import TrialEvalCallback
 
     mock_trial = MagicMock()
     mock_env = MagicMock(spec=VecEnv)
@@ -634,3 +640,96 @@ def test_trial_eval_callback_on_training_end_fallback():
     cb._on_training_end()
     assert cb._evaluate.call_count == 1
     mock_trial.report.assert_called_with(25.0, 1)
+
+
+def test_sample_params_from_config_range_indices():
+    import optuna
+
+    from rl_pipeline.sb3.config import SB3OptunaParamConfig
+    from rl_pipeline.sb3.experiment.optuna import sample_params_from_config
+
+    study = optuna.create_study(direction="maximize")
+    trial = study.ask()
+
+    tune_params = [
+        SB3OptunaParamConfig(
+            name="L_gain_min",
+            target="wrapper_kwargs.spec_rep_args.args.L_gain.range.0",
+            suggest_type="float",
+            low=10.0,
+            high=30.0,
+        ),
+        SB3OptunaParamConfig(
+            name="L_gain_max",
+            target="wrapper_kwargs.spec_rep_args.args.L_gain.range.1",
+            suggest_type="float",
+            low=60.0,
+            high=120.0,
+        ),
+        SB3OptunaParamConfig(
+            name="k_steepness_min",
+            target="wrapper_kwargs.spec_rep_args.args.k_steepness.range[0]",
+            suggest_type="float",
+            low=0.1,
+            high=0.5,
+        ),
+        SB3OptunaParamConfig(
+            name="k_steepness_max",
+            target="wrapper_kwargs.spec_rep_args.args.k_steepness.range[1]",
+            suggest_type="float",
+            low=0.8,
+            high=1.5,
+        ),
+    ]
+
+    sampled = sample_params_from_config(trial, tune_params)
+
+    l_gain_range = sampled["wrapper_kwargs"]["spec_rep_args"]["args"]["L_gain"]["range"]
+    assert isinstance(l_gain_range, list)
+    assert len(l_gain_range) == 2
+    assert 10.0 <= l_gain_range[0] <= 30.0
+    assert 60.0 <= l_gain_range[1] <= 120.0
+    assert l_gain_range[0] < l_gain_range[1]
+
+    k_steepness_range = sampled["wrapper_kwargs"]["spec_rep_args"]["args"][
+        "k_steepness"
+    ]["range"]
+    assert isinstance(k_steepness_range, list)
+    assert len(k_steepness_range) == 2
+    assert 0.1 <= k_steepness_range[0] <= 0.5
+    assert 0.8 <= k_steepness_range[1] <= 1.5
+    assert k_steepness_range[0] < k_steepness_range[1]
+
+
+def test_sample_params_from_config_invalid_range_pruned():
+    import optuna
+    import pytest
+
+    from rl_pipeline.sb3.config import SB3OptunaParamConfig
+    from rl_pipeline.sb3.experiment.optuna import sample_params_from_config
+
+    study = optuna.create_study(direction="maximize")
+    trial = study.ask()
+
+    # Define inverted search spaces where min (100) > max (10)
+    tune_params = [
+        SB3OptunaParamConfig(
+            name="bad_min",
+            target="wrapper_kwargs.spec_rep_args.args.L_gain.range.0",
+            suggest_type="float",
+            low=100.0,
+            high=100.0,
+        ),
+        SB3OptunaParamConfig(
+            name="bad_max",
+            target="wrapper_kwargs.spec_rep_args.args.L_gain.range.1",
+            suggest_type="float",
+            low=10.0,
+            high=10.0,
+        ),
+    ]
+
+    with pytest.raises(optuna.TrialPruned) as exc_info:
+        sample_params_from_config(trial, tune_params)
+
+    assert "strictly less than max" in str(exc_info.value)

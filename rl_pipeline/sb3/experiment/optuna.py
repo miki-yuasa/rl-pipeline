@@ -35,7 +35,26 @@ def sample_params_from_config(
         value = _suggest_param(trial=trial, param=param)
         _set_nested_value(sampled, target_key, value)
 
+    _validate_sampled_ranges(sampled)
     return sampled
+
+
+def _validate_sampled_ranges(data: Any) -> None:
+    """Validate that any 2-element range has min < max; prune trial otherwise."""
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key == "range" and isinstance(value, list) and len(value) == 2:
+                v_min, v_max = value[0], value[1]
+                if v_min is not None and v_max is not None and v_min >= v_max:
+                    raise optuna.TrialPruned(
+                        f"Sampled range min ({v_min}) must be strictly less than max ({v_max})."
+                    )
+            elif isinstance(value, (dict, list)):
+                _validate_sampled_ranges(value)
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, (dict, list)):
+                _validate_sampled_ranges(item)
 
 
 def _encode_choice(choice: Any) -> CategoricalChoiceType:
@@ -143,17 +162,28 @@ def _suggest_param(
 
 
 def _set_nested_value(target: dict[str, Any], dotted_key: str, value: Any) -> None:
-    if "." not in dotted_key:
-        target[dotted_key] = value
+    normalized_key = dotted_key.replace("[", ".").replace("]", "")
+    if "." not in normalized_key:
+        target[normalized_key] = value
         return
 
-    keys = dotted_key.split(".")
-    node = target
-    for key in keys[:-1]:
+    keys = normalized_key.split(".")
+    node: Any = target
+    for i, key in enumerate(keys[:-1]):
+        next_key = keys[i + 1]
+        if next_key in ("0", "1"):
+            if key not in node or not isinstance(node[key], list):
+                node[key] = [None, None]
+            node = node[key]
+            break
         if key not in node or not isinstance(node[key], dict):
             node[key] = {}
         node = node[key]
-    node[keys[-1]] = value
+
+    if isinstance(node, list) and keys[-1] in ("0", "1"):
+        node[int(keys[-1])] = value
+    else:
+        node[keys[-1]] = value
 
 
 def deep_update(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:

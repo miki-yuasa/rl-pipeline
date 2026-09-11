@@ -1,4 +1,5 @@
 from copy import deepcopy
+
 """YAML-to-runtime configuration readers for the SB3 pipeline.
 
 Readers in this module deserialize YAML-friendly structures and resolve
@@ -152,7 +153,7 @@ class MakeVecEnvConfigReader(BaseModel, YAMLReaderMixin):
         config : MakeVecEnvConfig
             Runtime vectorized environment configuration.
         """
-        vec_env_cls: type[SubprocVecEnv] | type[DummyVecEnv] | None = (
+        vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None = (
             get_class("stable_baselines3.common.vec_env." + self.vec_env_cls)
             if self.vec_env_cls
             else None
@@ -555,6 +556,7 @@ class SB3PipelineConfigReader(
     env_config_file: str = "env_config.yaml"
     wrapper_config_reader_cls: str = "rl_pipeline.gymnasium.WrapperConfigReader"
     wrapper_config_file: str | None = None
+    wrapper_kwargs: dict[str, Any] | None = None
     model_config_file: str = "model_config.yaml"
     experiment_manager_config: SB3ExperimentManagerConfigReader | None = None
     optuna_config: SB3OptunaConfigReader | None = None
@@ -643,6 +645,10 @@ class SB3PipelineConfigReader(
                 wrapper_config_reader_cls,
             )
             wrapper_config = wrapper_config_reader.to_config()
+            if self.wrapper_kwargs:
+                from .experiment.optuna import deep_update
+
+                deep_update(wrapper_config.wrapper_kwargs, self.wrapper_kwargs)
             return wrapper_config
         else:
             return None
@@ -710,7 +716,6 @@ SB3PipelineConfigReaderType = TypeVar(
 )
 
 
-
 def _format_templates_recursive(
     data: Any,
     replicate_signature: str,
@@ -732,6 +737,7 @@ def _format_templates_recursive(
             _format_templates_recursive(v, replicate_signature, rep_id) for v in data
         ]
     return data
+
 
 class SB3ReplicatePipelineConfigReader(
     BaseModel,
@@ -773,9 +779,7 @@ class SB3ReplicatePipelineConfigReader(
                     )
                 )
             except TypeError:
-                wrapper_config = (
-                    self.single_pipeline_config._to_wrapper_config()
-                )
+                wrapper_config = self.single_pipeline_config._to_wrapper_config()
 
             if wrapper_config is not None and wrapper_config.wrapper_kwargs:
                 formatted_kwargs = _format_templates_recursive(
