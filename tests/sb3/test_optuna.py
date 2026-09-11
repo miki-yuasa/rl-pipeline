@@ -468,13 +468,13 @@ def test_sb3_pipeline_optimize_wrapper_param_tuning(tmp_path: Path):
 
 
 def test_trial_loss_callback_and_minimization(tmp_path: Path):
-    from unittest.mock import MagicMock
+    from unittest import mock
 
     import optuna
 
     from rl_pipeline.sb3.callback import TrialLossCallback
 
-    mock_trial = MagicMock()
+    mock_trial = mock.create_autospec(optuna.Trial, instance=True, spec_set=True)
     mock_trial.should_prune.return_value = False
 
     cb = TrialLossCallback(trial=mock_trial, metric="loss/total", eval_freq=2)
@@ -578,22 +578,22 @@ def test_categorical_complex_choices_sampling_and_decoding(tmp_path: Path):
 
 
 def test_trial_eval_callback_timestep_triggering():
-    from unittest.mock import MagicMock
+    from unittest import mock
 
     from stable_baselines3.common.vec_env import VecEnv
 
     from rl_pipeline.sb3.callback import TrialEvalCallback
 
-    mock_trial = MagicMock()
+    mock_trial = mock.create_autospec(optuna.Trial, instance=True, spec_set=True)
     mock_trial.should_prune.return_value = False
-    mock_env = MagicMock(spec=VecEnv)
+    mock_env = mock.create_autospec(VecEnv, instance=True, spec_set=True)
 
     cb = TrialEvalCallback(
         eval_env=mock_env,
         trial=mock_trial,
         eval_freq=1000,
     )
-    cb._evaluate = MagicMock(return_value=True)
+    cb._evaluate = mock.create_autospec(cb._evaluate, spec_set=True, return_value=True)
     cb.last_mean_reward = 42.0
 
     # Step 1: 500 timesteps, should not trigger eval
@@ -614,15 +614,15 @@ def test_trial_eval_callback_timestep_triggering():
 
 
 def test_trial_eval_callback_on_training_end_fallback():
-    from unittest.mock import MagicMock
+    from unittest import mock
 
     import numpy as np
     from stable_baselines3.common.vec_env import VecEnv
 
     from rl_pipeline.sb3.callback import TrialEvalCallback
 
-    mock_trial = MagicMock()
-    mock_env = MagicMock(spec=VecEnv)
+    mock_trial = mock.create_autospec(optuna.Trial, instance=True, spec_set=True)
+    mock_env = mock.create_autospec(VecEnv, instance=True, spec_set=True)
 
     cb = TrialEvalCallback(
         eval_env=mock_env,
@@ -635,7 +635,9 @@ def test_trial_eval_callback_on_training_end_fallback():
         cb.last_mean_reward = 25.0
         return True
 
-    cb._evaluate = MagicMock(side_effect=fake_eval)
+    cb._evaluate = mock.create_autospec(
+        cb._evaluate, spec_set=True, side_effect=fake_eval
+    )
 
     cb._on_training_end()
     assert cb._evaluate.call_count == 1
