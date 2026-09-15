@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import pathlib
-from unittest.mock import MagicMock
+from typing import Any
+from unittest import mock
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -10,9 +11,13 @@ from rl_pipeline.sb3.callback import VideoRecorderCallback
 from rl_pipeline.sb3.utils.vis import record_replay
 
 
-def _dummy_model(env: gym.Env) -> BaseAlgorithm:
-    model = MagicMock(spec=BaseAlgorithm)
-    model.predict.side_effect = lambda obs: (env.action_space.sample(), None)
+def _dummy_model(env: gym.Env[Any, Any]) -> BaseAlgorithm:
+    """Creates a mock policy algorithm adhering to BaseAlgorithm's spec."""
+    model = mock.create_autospec(BaseAlgorithm, instance=True, spec_set=True)
+    model.predict.side_effect = lambda obs, **kwargs: (
+        env.action_space.sample(),
+        None,
+    )
     return model
 
 
