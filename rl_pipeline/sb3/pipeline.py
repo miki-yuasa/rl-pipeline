@@ -26,7 +26,11 @@ from rl_pipeline.core.eval.stats import PolicyEvalStats
 from rl_pipeline.core.pipeline import BasePipeline
 from rl_pipeline.core.utils.io import add_number_to_existing_filepath
 
-from .callback import TrialEvalCallback, TrialLossCallback, VideoRecorderCallback
+from .callback import (
+    TrialEvalCallback,
+    TrialLossCallback,
+    VideoRecorderCallback,
+)
 from .config import (
     SB3CallbackConfig,
     SB3LearnConfig,
@@ -43,7 +47,9 @@ if TYPE_CHECKING:
 
 
 def init_callback(
-    eval_env: VecEnv, video_env: Env | Wrapper, callback_config: SB3CallbackConfig
+    eval_env: VecEnv,
+    video_env: Env | Wrapper,
+    callback_config: SB3CallbackConfig,
 ) -> list[BaseCallback]:
     """Initialize the default callback list for SB3 training.
 
@@ -84,14 +90,18 @@ def init_callback(
 
     for arbitrary_callback_config in callback_config.arbitrary_callback_configs:
         callback_class = arbitrary_callback_config.callback_class
-        callback_instance = callback_class(**arbitrary_callback_config.callback_kwargs)
+        callback_instance = callback_class(
+            **arbitrary_callback_config.callback_kwargs
+        )
         callbacks.append(callback_instance)
 
     return callbacks
 
 
 class SB3Pipeline(
-    BasePipeline[SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader, SB3ExperimentManager],
+    BasePipeline[
+        SB3PipelineConfig, SB3EnvLoader, SB3ModelLoader, SB3ExperimentManager
+    ],
 ):
     """End-to-end SB3 pipeline for train/evaluate/replay/optimize workflows.
 
@@ -322,7 +332,9 @@ class SB3Pipeline(
                 f"SB3Pipeline: Model {self.config.save_config.model_save_path} already exists, loading..."
             )
             model = self.model_loader.load_model(
-                self.config.save_config.model_save_path, demo_env, self.config.device
+                self.config.save_config.model_save_path,
+                demo_env,
+                self.config.device,
             )
         return model
 
@@ -445,12 +457,16 @@ class SB3Pipeline(
 
         # Only save four decimal places for readability
         decimal_places: int = 4
-        mean_reward: float = float(np.mean(episode_rewards).round(decimal_places))
+        mean_reward: float = float(
+            np.mean(episode_rewards).round(decimal_places)
+        )
         std_reward: float = float(np.std(episode_rewards).round(decimal_places))
         mean_episode_length: float = float(
             np.mean(episode_lengths).round(decimal_places)
         )
-        std_episode_length: float = float(np.std(episode_lengths).round(decimal_places))
+        std_episode_length: float = float(
+            np.std(episode_lengths).round(decimal_places)
+        )
         success_buffer_result: SuccessBufferEval = success_buffer.post_eval()
 
         eval_result = PolicyEvalStats(
@@ -470,7 +486,9 @@ class SB3Pipeline(
             eval_file_path = os.path.join(
                 self.save_config.eval_save_dir, eval_file_name
             )
-            modified_eval_file_path = add_number_to_existing_filepath(eval_file_path)
+            modified_eval_file_path = add_number_to_existing_filepath(
+                eval_file_path
+            )
             self._save_eval_result(eval_result, modified_eval_file_path)
 
         return eval_result
@@ -479,7 +497,8 @@ class SB3Pipeline(
         self,
         model: BaseAlgorithm,
         save_path: str | None = None,
-        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None] | None = None,
+        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None]
+        | None = None,
         verbose: bool = True,
     ) -> None:
         """
@@ -500,7 +519,11 @@ class SB3Pipeline(
             save_path = self.save_config.animation_save_path
 
         player = custom_player if custom_player is not None else record_replay
-        player(self.env_loader.env(), model, save_path, self.verbose or verbose)
+        demo_env = self.env_loader.env()
+        try:
+            player(demo_env, model, save_path, self.verbose or verbose)
+        finally:
+            demo_env.close()
 
     def optimize(
         self,
@@ -539,7 +562,9 @@ class SB3Pipeline(
             split_sampled_params,
         )
 
-        tune_config = optuna_config if optuna_config is not None else self.optuna_config
+        tune_config = (
+            optuna_config if optuna_config is not None else self.optuna_config
+        )
         if tune_config is None:
             raise ValueError(
                 "optuna_config is required. Set SB3PipelineConfig.optuna_config or pass it to optimize()."
@@ -643,7 +668,9 @@ class SB3Pipeline(
             )
             os.makedirs(trial_artifact_dir, exist_ok=True)
             best_model_path = os.path.join(trial_artifact_dir, "best_model.zip")
-            final_model_path = os.path.join(trial_artifact_dir, "final_model.zip")
+            final_model_path = os.path.join(
+                trial_artifact_dir, "final_model.zip"
+            )
 
             try:
                 sampled_raw = trial_sampler(trial)
@@ -652,8 +679,8 @@ class SB3Pipeline(
                     if self.config.wrapper_config
                     else None
                 )
-                sampled_algo_kwargs, sampled_wrapper_kwargs = split_sampled_params(
-                    sampled_raw, base_wrapper_kwargs
+                sampled_algo_kwargs, sampled_wrapper_kwargs = (
+                    split_sampled_params(sampled_raw, base_wrapper_kwargs)
                 )
                 merged_algo_kwargs = deep_update(
                     deepcopy(base_algo_kwargs), sampled_algo_kwargs
@@ -815,7 +842,8 @@ class SB3Pipeline(
         n_processes = tune_config.n_jobs
         base_trials, remainder = divmod(tune_config.n_trials, n_processes)
         trial_chunks = [
-            base_trials + (1 if i < remainder else 0) for i in range(n_processes)
+            base_trials + (1 if i < remainder else 0)
+            for i in range(n_processes)
         ]
 
         ctx = mp.get_context("fork")
@@ -823,7 +851,9 @@ class SB3Pipeline(
         for n_trials_chunk in trial_chunks:
             if n_trials_chunk <= 0:
                 continue
-            process = ctx.Process(target=_optimize_chunk, args=(n_trials_chunk,))
+            process = ctx.Process(
+                target=_optimize_chunk, args=(n_trials_chunk,)
+            )
             process.start()
             processes.append(process)
 
@@ -869,7 +899,9 @@ class SB3Pipeline(
 
         best_trial = study.best_trial
         tune_params = (
-            self.config.optuna_config.tune_params if self.config.optuna_config else ()
+            self.config.optuna_config.tune_params
+            if self.config.optuna_config
+            else ()
         )
         best_params = (
             decode_trial_params(best_trial.params, tune_params)
@@ -920,7 +952,9 @@ class SB3ReplicatePipeline:
         print(len(models), len(eval_results))
     """
 
-    def __init__(self, config: SB3ReplicatePipelineConfig, verbose: bool = True):
+    def __init__(
+        self, config: SB3ReplicatePipelineConfig, verbose: bool = True
+    ):
         self.replicate_config = config.replicate_config
         self.ind_pipeline_configs = config.ind_pipeline_configs
         self.ind_pipelines: list[SB3Pipeline] = [
@@ -965,7 +999,9 @@ class SB3ReplicatePipeline:
         deterministic: bool = False,
         save_to_file: bool = True,
         eval_file_name: str = "model_eval.yaml",
-        checkpoint: int | Literal["latest", "final", "best"] | BaseAlgorithm = "final",
+        checkpoint: int
+        | Literal["latest", "final", "best"]
+        | BaseAlgorithm = "final",
     ) -> list[PolicyEvalStats]:
         """Evaluate all replicate pipelines.
 
@@ -1029,7 +1065,8 @@ class SB3ReplicatePipeline:
     def record_replays(
         self,
         models: list[BaseAlgorithm],
-        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None] | None = None,
+        custom_player: Callable[[Env, BaseAlgorithm, str, bool], None]
+        | None = None,
         verbose: bool = True,
     ) -> None:
         """

@@ -114,7 +114,9 @@ class SuccessEvalCallback(EvalCallback):
             callback=self.success_buffer._log_success_callback,
         )
 
-        success_buffer_result: SuccessBufferEval = self.success_buffer.post_eval()
+        success_buffer_result: SuccessBufferEval = (
+            self.success_buffer.post_eval()
+        )
 
         if self.log_path is not None:
             assert isinstance(episode_rewards, list)
@@ -133,7 +135,9 @@ class SuccessEvalCallback(EvalCallback):
 
             # Save failures log if present
             if len(success_buffer_result.episode_failures) > 0:
-                self.evaluations_failures.append(success_buffer_result.episode_failures)
+                self.evaluations_failures.append(
+                    success_buffer_result.episode_failures
+                )
                 kwargs = {"failures": self.evaluations_failures}
 
             np.savez(
@@ -144,7 +148,10 @@ class SuccessEvalCallback(EvalCallback):
                 **kwargs,  # type: ignore[arg-type]
             )
 
-        mean_reward, std_reward = np.mean(episode_rewards), np.std(episode_rewards)
+        mean_reward, std_reward = (
+            np.mean(episode_rewards),
+            np.std(episode_rewards),
+        )
         mean_ep_length, std_ep_length = (
             np.mean(episode_lengths),
             np.std(episode_lengths),
@@ -156,7 +163,9 @@ class SuccessEvalCallback(EvalCallback):
                 f"Eval num_timesteps={self.num_timesteps}, "
                 f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
             )
-            print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
+            print(
+                f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}"
+            )
         # Add to current Logger
         self.logger.record("eval/mean_reward", float(mean_reward))
         self.logger.record("eval/mean_ep_length", mean_ep_length)
@@ -195,7 +204,9 @@ class SuccessEvalCallback(EvalCallback):
             if self.verbose >= 1:
                 print("New best mean reward!")
             if self.best_model_save_path is not None:
-                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+                self.model.save(
+                    os.path.join(self.best_model_save_path, "best_model")
+                )
             self.best_mean_reward = float(mean_reward)
             # Trigger callback on new best model, if needed
             if self.callback_on_new_best is not None:
@@ -214,6 +225,8 @@ class SuccessEvalCallback(EvalCallback):
 
 
 class VideoRecorderCallback(BaseCallback):
+    """Callback for periodically recording video replays during training."""
+
     def __init__(
         self,
         eval_env: Env,
@@ -223,13 +236,15 @@ class VideoRecorderCallback(BaseCallback):
         file_ext: str = "gif",
         deterministic: bool = False,
     ):
-        """
-        Records a video of an agent's trajectory traversing ``eval_env`` and logs it to TensorBoard
+        """Initializes VideoRecorderCallback.
 
-        :param eval_env: A gym environment from which the trajectory is recorded
-        :param render_freq: Render the agent's trajectory every eval_freq call of the callback.
-        :param n_eval_episodes: Number of episodes to render
-        :param deterministic: Whether to use deterministic or stochastic policy
+        Args:
+            eval_env: Gym environment from which trajectories are recorded.
+            render_freq: Interval of callback calls between video recordings.
+            save_dir: Directory where animation files are saved.
+            name_prefix: Prefix for saved animation file names.
+            file_ext: Animation file extension.
+            deterministic: Whether to sample actions deterministically.
         """
         super().__init__()
         self._eval_env = eval_env
@@ -245,9 +260,19 @@ class VideoRecorderCallback(BaseCallback):
                 self._save_dir,
                 f"{self._name_prefix}_{self.num_timesteps}_steps.{self._file_ext}",
             )
-            record_replay(self._eval_env, self.model, animation_save_path, False)
+            record_replay(
+                self._eval_env,
+                self.model,
+                animation_save_path,
+                verbose=False,
+                close_env=False,
+            )
 
         return True
+
+    def _on_training_end(self) -> None:
+        """Closes the evaluation environment upon completion of training."""
+        self._eval_env.close()
 
 
 class TrialEvalCallback(SuccessEvalCallback):
@@ -281,7 +306,8 @@ class TrialEvalCallback(SuccessEvalCallback):
             return False
         timestep_triggered = (
             self.num_timesteps > 0
-            and (self.num_timesteps - self.last_eval_timesteps) >= self.eval_freq
+            and (self.num_timesteps - self.last_eval_timesteps)
+            >= self.eval_freq
         )
         call_triggered = self.n_calls > 0 and self.n_calls % self.eval_freq == 0
         return timestep_triggered or call_triggered
@@ -330,7 +356,8 @@ class TrialLossCallback(BaseCallback):
             return False
         timestep_triggered = (
             self.num_timesteps > 0
-            and (self.num_timesteps - self.last_eval_timesteps) >= self.eval_freq
+            and (self.num_timesteps - self.last_eval_timesteps)
+            >= self.eval_freq
         )
         call_triggered = self.n_calls > 0 and self.n_calls % self.eval_freq == 0
         return timestep_triggered or call_triggered
@@ -362,7 +389,9 @@ class TrialLossCallback(BaseCallback):
                 current_mean = float(np.mean(self._recent_losses))
                 self._recent_losses.clear()
             else:
-                current_mean = loss_val if loss_val is not None else float("inf")
+                current_mean = (
+                    loss_val if loss_val is not None else float("inf")
+                )
 
             self.last_loss = current_mean
             self.eval_idx += 1
@@ -426,14 +455,18 @@ class CheckpointCallbackConfig(BaseModel):
     save_freq: int = Field(
         ge=1, description="Frequency of saving the model in timesteps."
     )
-    save_path: str = Field(default="ckpts", description="Path to save the checkpoints.")
+    save_path: str = Field(
+        default="ckpts", description="Path to save the checkpoints."
+    )
     name_prefix: str = Field(
         default="ckpt", description="Prefix for the checkpoint filenames."
     )
     save_replay_buffer: bool = Field(
         default=False, description="Whether to save replay files."
     )
-    verbose: int = Field(default=0, description="Verbosity level of the callback.")
+    verbose: int = Field(
+        default=0, description="Verbosity level of the callback."
+    )
 
 
 class VideoRecorderCallbackConfig(BaseModel):
