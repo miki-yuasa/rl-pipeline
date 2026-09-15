@@ -5,10 +5,10 @@ from typing import Any
 from unittest import mock
 
 import gymnasium as gym
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 from rl_pipeline.sb3.callback import VideoRecorderCallback
-from rl_pipeline.sb3.utils.vis import record_replay
 
 
 def _dummy_model(env: gym.Env[Any, Any]) -> BaseAlgorithm:
@@ -21,37 +21,33 @@ def _dummy_model(env: gym.Env[Any, Any]) -> BaseAlgorithm:
     return model
 
 
-def test_record_replay_keep_env_open(tmp_path: pathlib.Path) -> None:
-    env = gym.make("CartPole-v1", render_mode="rgb_array")
-    model = _dummy_model(env)
-    save_file = tmp_path / "replay_1.gif"
-
-    record_replay(env, model, str(save_file), verbose=False, close_env=False)
-    assert save_file.exists()
-
-    # The environment should still be usable without re-creating it
-    save_file_2 = tmp_path / "replay_2.gif"
-    record_replay(env, model, str(save_file_2), verbose=False, close_env=True)
-    assert save_file_2.exists()
-
-
-def test_video_recorder_callback_lifecycle(tmp_path: pathlib.Path) -> None:
-    env = gym.make("CartPole-v1", render_mode="rgb_array")
+def test_video_recorder_callback_records_checkpoints(
+    tmp_path: pathlib.Path,
+) -> None:
+    env = TimeLimit(
+        gym.make("CartPole-v1", render_mode="rgb_array"), max_episode_steps=2
+    )
     model = _dummy_model(env)
 
     callback = VideoRecorderCallback(
         eval_env=env,
-        render_freq=1,
+        render_freq=10,
         save_dir=str(tmp_path),
         name_prefix="test_model",
     )
     callback.init_callback(model)
 
-    callback.n_calls = 1
+    # First checkpoint recording.
+    callback.n_calls = 10
     callback.num_timesteps = 100
     callback._on_step()
+    assert (tmp_path / "test_model_100_steps.gif").exists()
 
-    expected_file = tmp_path / "test_model_100_steps.gif"
-    assert expected_file.exists()
+    # Subsequent checkpoint verifies the environment is not prematurely closed.
+    callback.n_calls = 20
+    callback.num_timesteps = 200
+    callback._on_step()
+    assert (tmp_path / "test_model_200_steps.gif").exists()
 
+    # Environment is closed upon training completion.
     callback._on_training_end()
