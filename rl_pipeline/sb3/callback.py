@@ -1,5 +1,6 @@
 import os
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import gymnasium as gym
 import numpy as np
@@ -125,20 +126,20 @@ class SuccessEvalCallback(EvalCallback):
             self.evaluations_results.append(episode_rewards)
             self.evaluations_length.append(episode_lengths)
 
-            kwargs = {}
+            kwargs: dict[str, Any] = {}
             # Save success log if present
             if len(success_buffer_result.episode_successes) > 0:
                 self.evaluations_successes.append(
                     success_buffer_result.episode_successes
                 )
-                kwargs = {"successes": self.evaluations_successes}
+                kwargs["successes"] = self.evaluations_successes
 
             # Save failures log if present
             if len(success_buffer_result.episode_failures) > 0:
                 self.evaluations_failures.append(
                     success_buffer_result.episode_failures
                 )
-                kwargs = {"failures": self.evaluations_failures}
+                kwargs["failures"] = self.evaluations_failures
 
             np.savez(
                 self.log_path,
@@ -235,6 +236,7 @@ class VideoRecorderCallback(BaseCallback):
         name_prefix: str = "rl_model",
         file_ext: str = "gif",
         deterministic: bool = False,
+        custom_player: Callable[..., None] | None = None,
     ):
         """Initializes VideoRecorderCallback.
 
@@ -245,6 +247,7 @@ class VideoRecorderCallback(BaseCallback):
             name_prefix: Prefix for saved animation file names.
             file_ext: Animation file extension.
             deterministic: Whether to sample actions deterministically.
+            custom_player: Optional custom player callable to record replays.
         """
         super().__init__()
         self._eval_env = eval_env
@@ -253,6 +256,7 @@ class VideoRecorderCallback(BaseCallback):
         self._save_dir = save_dir
         self._name_prefix = name_prefix
         self._file_ext = file_ext
+        self._custom_player = custom_player
 
     def _on_step(self) -> bool:
         if self.n_calls % self._render_freq == 0:
@@ -260,13 +264,26 @@ class VideoRecorderCallback(BaseCallback):
                 self._save_dir,
                 f"{self._name_prefix}_{self.num_timesteps}_steps.{self._file_ext}",
             )
-            record_replay(
-                self._eval_env,
-                self.model,
-                animation_save_path,
-                verbose=False,
-                close_env=False,
+            player = (
+                self._custom_player
+                if self._custom_player is not None
+                else record_replay
             )
+            try:
+                player(
+                    self._eval_env,
+                    self.model,
+                    animation_save_path,
+                    verbose=False,
+                    close_env=False,
+                )
+            except TypeError:
+                player(
+                    self._eval_env,
+                    self.model,
+                    animation_save_path,
+                    verbose=False,
+                )
 
         return True
 

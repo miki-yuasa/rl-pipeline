@@ -15,6 +15,7 @@ def record_replay(
     animation_save_path: str,
     verbose: bool = True,
     close_env: bool = True,
+    fps: int = 10,
 ) -> None:
     """Records an evaluation episode replay and saves it as an animation.
 
@@ -24,14 +25,21 @@ def record_replay(
         animation_save_path: Filepath where the animation should be saved.
         verbose: Whether to print rollout transition details.
         close_env: Whether to close the environment upon recording completion.
+        fps: Frames per second for the saved animation.
     """
     obs, _ = demo_env.reset()
     terminated: bool = False
     truncated: bool = False
-    frames = [demo_env.render()]
+    first_frame = demo_env.render()
+    frames: list[Any] = []
+    if isinstance(first_frame, list):
+        frames.extend(first_frame)
+    elif first_frame is not None:
+        frames.append(first_frame)
+
     rewards: list[float] = []
     while not (terminated or truncated):
-        action, _ = model.predict(obs)  # type: ignore
+        action, _ = model.predict(obs)  # type: ignore[assignment]
         obs, reward, terminated, truncated, info = demo_env.step(action)
         if verbose:
             print(f"Step {len(rewards) + 1}:")
@@ -44,9 +52,12 @@ def record_replay(
             pprint(obs)
             print(" - Info: ")
             pprint(info)
-        rewards.append(reward)  # type: ignore
+        rewards.append(float(reward))
         frame = demo_env.render()
-        frames.append(frame)
+        if isinstance(frame, list):
+            frames.extend(frame)
+        elif frame is not None:
+            frames.append(frame)
 
     if close_env:
         demo_env.close()
@@ -55,6 +66,8 @@ def record_replay(
 
     save_path = Path(animation_save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    imageio.mimsave(save_path, frames, fps=10, dpi=300, loop=10)  # type: ignore
+    if frames:
+        duration_ms = 1000.0 / max(1, fps)
+        imageio.mimsave(save_path, frames, duration=duration_ms, loop=0)  # type: ignore[call-overload]
     if verbose:
         print(f" - Replay saved to {animation_save_path}")
