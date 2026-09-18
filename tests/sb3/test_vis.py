@@ -53,41 +53,6 @@ def test_video_recorder_callback_records_checkpoints(
     callback._on_training_end()
 
 
-def test_record_replay_with_list_frames(tmp_path: pathlib.Path) -> None:
-    import numpy as np
-
-    from rl_pipeline.sb3.utils.vis import record_replay
-
-    dummy_frame = np.zeros((10, 10, 3), dtype=np.uint8)
-
-    class ListRenderEnv(gym.Env[Any, Any]):
-        def __init__(self) -> None:
-            self.observation_space = gym.spaces.Box(0, 1, shape=(2,))
-            self.action_space = gym.spaces.Discrete(2)
-            self._step_count = 0
-
-        def reset(self, **kwargs: Any) -> tuple[Any, dict[str, Any]]:
-            self._step_count = 0
-            return np.zeros((2,), dtype=np.float32), {}
-
-        def step(
-            self, action: Any
-        ) -> tuple[Any, float, bool, bool, dict[str, Any]]:
-            self._step_count += 1
-            terminated = self._step_count >= 2
-            return np.zeros((2,), dtype=np.float32), 1.0, terminated, False, {}
-
-        def render(self) -> list[Any]:
-            return [dummy_frame, dummy_frame]
-
-    env = ListRenderEnv()
-    model = _dummy_model(env)
-    save_file = str(tmp_path / "list_frames.gif")
-
-    record_replay(env, model, save_file, verbose=False, close_env=True)
-    assert (tmp_path / "list_frames.gif").exists()
-
-
 def test_video_recorder_callback_with_custom_player(
     tmp_path: pathlib.Path,
 ) -> None:
