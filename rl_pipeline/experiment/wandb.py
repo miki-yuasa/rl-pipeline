@@ -1,11 +1,12 @@
-from typing import Any, Generic, Literal, Sequence
+from collections.abc import Sequence
+from typing import Any, Generic, Literal
 
+import wandb
 from pydantic import BaseModel
 from wandb.sdk.lib.paths import StrPath
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.wandb_settings import Settings
 
-import wandb
 from rl_pipeline.core import BaseExperimentManager, PipelineConfigType
 
 
@@ -259,7 +260,9 @@ class WandbExperimentManager(
             if isinstance(manager_config, dict)
             else manager_config.model_dump()
         )
-        run = wandb.init(**manager_config_dict, config=logged_param_config.model_dump())
+        run = wandb.init(
+            **manager_config_dict, config=logged_param_config.model_dump()
+        )
         self.run = run
         return run
 
