@@ -255,8 +255,13 @@ class SB3Pipeline(
         callbacks : list[BaseCallback]
             Ordered callback instances.
         """
+        eval_monitor_dir = (
+            os.path.join(self.save_config.model_save_dir, "eval_monitor")
+            if self.config.vec_config and self.config.vec_config.monitor_dir
+            else None
+        )
         return init_callback(
-            eval_env=self.env_loader.vec_env(),
+            eval_env=self.env_loader.vec_env(monitor_dir=eval_monitor_dir),
             video_env=self.env_loader.env(),
             callback_config=self.callback_configs,
         )
@@ -437,7 +442,7 @@ class SB3Pipeline(
             case "single":
                 eval_env = self.env_loader.env()
             case "vec":
-                eval_env = self.env_loader.vec_env()
+                eval_env = self.env_loader.vec_env(monitor_dir=None)
             case Env():
                 eval_env = env
             case _:
@@ -720,7 +725,7 @@ class SB3Pipeline(
                         verbose=0,
                     )
                 else:
-                    eval_env = trial_env_loader.vec_env()
+                    eval_env = trial_env_loader.vec_env(monitor_dir=None)
                     eval_callback = TrialEvalCallback(
                         eval_env=eval_env,
                         trial=trial,

@@ -7,11 +7,16 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import VecEnv
 
 from rl_pipeline.core.loader import BaseEnvLoader, BaseModelLoader
-from rl_pipeline.core.utils.io import get_ckpt_file, get_file_with_largest_number
+from rl_pipeline.core.utils.io import (
+    get_ckpt_file,
+    get_file_with_largest_number,
+)
 from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
 
 from .config import MakeVecEnvConfig, SB3AlgorithmConfig
 from .utils.env import make_vec_env
+
+_DEFAULT_MONITOR_DIR = object()
 
 
 class SB3EnvLoader(
@@ -36,16 +41,28 @@ class SB3EnvLoader(
     ):
         env: Env[ObsType, ActType] = gym.make(**self.env_config.make_env_args())
         if self.wrapper_config:
-            wrapped_env: Wrapper[WrapperObsType, WrapperActType, ObsType, ActType] = (
-                self.wrapper_config.wrapper_class(
-                    env, **self.wrapper_config.wrapper_kwargs
-                )
+            wrapped_env: Wrapper[
+                WrapperObsType, WrapperActType, ObsType, ActType
+            ] = self.wrapper_config.wrapper_class(
+                env, **self.wrapper_config.wrapper_kwargs
             )
             return wrapped_env
         else:
             return env
 
-    def vec_env(self) -> VecEnv:
+    def vec_env(
+        self, monitor_dir: str | None | object = _DEFAULT_MONITOR_DIR
+    ) -> VecEnv:
+        """Create a vectorized environment.
+
+        Args:
+            monitor_dir: Optional override for monitor directory. If omitted,
+                defaults to self.vec_config.monitor_dir. If explicitly None,
+                disables writing monitor logs to disk.
+
+        Returns:
+            Vectorized environment instance.
+        """
         assert self.vec_config is not None, "vec_config must be provided"
 
         wrapper_class = None
@@ -60,12 +77,19 @@ class SB3EnvLoader(
             "render_mode": self.env_config.render_mode,
         }
 
+        if monitor_dir is _DEFAULT_MONITOR_DIR:
+            target_monitor_dir = self.vec_config.monitor_dir
+        elif isinstance(monitor_dir, str):
+            target_monitor_dir = monitor_dir
+        else:
+            target_monitor_dir = None
+
         return make_vec_env(
             env_id=self.env_config.id,
             n_envs=self.vec_config.n_envs,
             seed=self.vec_config.seed,
             start_index=self.vec_config.start_index,
-            monitor_dir=self.vec_config.monitor_dir,
+            monitor_dir=target_monitor_dir,
             env_kwargs=env_kwargs,
             wrapper_class=wrapper_class,
             wrapper_kwargs=wrapper_kwargs,
