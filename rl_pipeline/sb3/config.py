@@ -2,10 +2,12 @@ from __future__ import annotations
 
 """Configuration models for SB3 training, evaluation, and replicate pipelines."""
 
-import os
+from collections.abc import Mapping
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Self
 
+import yaml
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -22,7 +24,6 @@ from rl_pipeline.core.utils.io import format_large_number, get_class
 from rl_pipeline.gymnasium.config import (
     MakeEnvConfig,
     WrapperConfig,
-    load_wrapper_config,
 )
 
 from .algo_config import (
@@ -35,6 +36,7 @@ from .callback_config import (
     SB3CallbackConfig,
 )
 from .experiment.base import SB3ExperimentManager
+from .ingestion import ingest_pipeline_config_dict
 from .optuna_config import (
     SB3OptunaConfig,
     SB3OptunaDashboardConfig,
@@ -126,14 +128,31 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
     experiment_manager_config: SB3ExperimentManagerConfig | None = None
     optuna_config: SB3OptunaConfig | None = None
 
-    config_dir: str | None = None
-    env_config_file: str | None = None
-    wrapper_class: type[Any] | str | None = None
-    wrapper_config_file: str | None = None
-    wrapper_kwargs: dict[str, Any] | None = None
-    model_config_file: str | None = None
-
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def load_ingested_data(cls, data: Any) -> Any:
+        if isinstance(data, Mapping):
+            return ingest_pipeline_config_dict(data)
+        return data
+
+    @classmethod
+    def from_yaml(cls, filepath: str | Path) -> Self:
+        """Load configuration from a YAML file with base directory inference.
+
+        Args:
+            filepath: Path to the YAML file.
+
+        Returns:
+            Instantiated and resolved SB3PipelineConfig.
+        """
+        path = Path(filepath)
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        if isinstance(data, dict) and "config_dir" not in data:
+            data["config_dir"] = str(path.parent)
+        return cls.model_validate(data)
 
     @field_validator("device", mode="before")
     def _normalize_device(cls, val: Any) -> str:
@@ -142,39 +161,7 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
         return str(val)
 
     def resolve(self, replicate_signature: str = "") -> Self:
-        """Resolve nested file references and propagate artifact paths."""
-        if self.env_config is None and self.env_config_file:
-            env_path = (
-                os.path.join(self.config_dir, self.env_config_file)
-                if self.config_dir
-                else self.env_config_file
-            )
-            self.env_config = MakeEnvConfig.from_yaml(env_path)
-
-        if self.wrapper_config is None and self.wrapper_config_file:
-            self.wrapper_config = load_wrapper_config(
-                self.wrapper_config_file,
-                config_dir=self.config_dir,
-                wrapper_kwargs_override=self.wrapper_kwargs,
-                default_wrapper_class=self.wrapper_class,
-            )
-
-        if self.model_config_file:
-            model_path = (
-                os.path.join(self.config_dir, self.model_config_file)
-                if self.config_dir
-                else self.model_config_file
-            )
-            model_cfg = SB3ModelConfig.from_yaml(model_path)
-            if self.algo_config is None:
-                self.algo_config = model_cfg.algo_config
-            if self.learn_config == SB3LearnConfig():
-                self.learn_config = model_cfg.learn_config
-            if self.vec_config is None:
-                self.vec_config = model_cfg.vec_config
-            if self.callback_config is None:
-                self.callback_config = model_cfg.callback_config
-
+        """Propagate artifact paths across save, vec, and callback configurations."""
         model_name_suffix = (
             format_large_number(self.learn_config.total_timesteps)
             if self.learn_config
@@ -252,16 +239,29 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
+    @classmethod
+    def from_yaml(cls, filepath: str | Path) -> Self:
+        """Load replicate configuration from a YAML file.
+
+        Args:
+            filepath: Path to the YAML file.
+
+        Returns:
+            Instantiated SB3ReplicatePipelineConfig with resolved replicas.
+        """
+        path = Path(filepath)
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        if isinstance(data, dict):
+            single = data.get("single_pipeline_config")
+            if isinstance(single, dict) and "config_dir" not in single:
+                single["config_dir"] = str(path.parent)
+        return cls.model_validate(data)
+
     def build_replicates(self) -> Self:
         """Build independent pipeline configurations from single_pipeline_config."""
         if not self.single_pipeline_config or self.ind_pipeline_configs:
             return self
-
-        base_cfg = (
-            self.single_pipeline_config
-            if isinstance(self.single_pipeline_config, SB3PipelineConfig)
-            else SB3PipelineConfig.from_dict(self.single_pipeline_config)
-        )
 
         replicate_pipeline_configs: list[SB3PipelineConfig] = []
         for rep_id in range(self.replicate_config.num_replicates):
@@ -270,17 +270,30 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
                 rep_id=actual_rep_id
             )
 
-            replica = deepcopy(base_cfg)
-            replica.resolve(replicate_signature=rep_signature)
-
-            if replica.wrapper_config and replica.wrapper_config.wrapper_kwargs:
-                replica.wrapper_config.wrapper_kwargs = (
-                    _format_templates_recursive(
-                        replica.wrapper_config.wrapper_kwargs,
-                        replicate_signature=rep_signature,
-                        rep_id=actual_rep_id,
-                    )
+            if isinstance(self.single_pipeline_config, dict):
+                replica_dict = _format_templates_recursive(
+                    deepcopy(self.single_pipeline_config),
+                    replicate_signature=rep_signature,
+                    rep_id=actual_rep_id,
                 )
+                replica = SB3PipelineConfig.from_dict(replica_dict)
+                replica.resolve(replicate_signature=rep_signature)
+            else:
+                base_cfg = (
+                    self.single_pipeline_config
+                    if isinstance(self.single_pipeline_config, SB3PipelineConfig)
+                    else SB3PipelineConfig.from_dict(self.single_pipeline_config)
+                )
+                replica = deepcopy(base_cfg)
+                replica.resolve(replicate_signature=rep_signature)
+                if replica.wrapper_config and replica.wrapper_config.wrapper_kwargs:
+                    replica.wrapper_config.wrapper_kwargs = (
+                        _format_templates_recursive(
+                            replica.wrapper_config.wrapper_kwargs,
+                            replicate_signature=rep_signature,
+                            rep_id=actual_rep_id,
+                        )
+                    )
 
             base_seed = (
                 replica.algo_config.algo_kwargs.get("seed")

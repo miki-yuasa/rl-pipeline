@@ -80,7 +80,7 @@ class GymEnvConfig(BaseModel, YAMLReaderMixin):
 
 
 def load_wrapper_config(
-    data_or_path: str | Path | Mapping[str, Any] | None,
+    data_or_path: str | Path | Mapping[str, Any] | WrapperConfig | None,
     config_dir: str | Path | None = None,
     wrapper_kwargs_override: Mapping[str, Any] | None = None,
     default_wrapper_class: type[Wrapper] | str | None = None,
@@ -103,6 +103,11 @@ def load_wrapper_config(
     if data_or_path is None:
         return None
 
+    if isinstance(data_or_path, WrapperConfig):
+        if wrapper_kwargs_override:
+            data_or_path.wrapper_kwargs.update(wrapper_kwargs_override)
+        return data_or_path
+
     if isinstance(data_or_path, (str, Path)):
         resolved_path = (
             os.path.join(config_dir, str(data_or_path))
@@ -124,7 +129,12 @@ def load_wrapper_config(
             "Wrapper configuration must specify `_target_` or `wrapper_class`."
         )
 
-    instantiated_kwargs: dict[str, Any] = instantiate(config_by_key)
+    raw_kwargs = (
+        config_by_key["wrapper_kwargs"]
+        if "wrapper_kwargs" in config_by_key and len(config_by_key) == 1
+        else config_by_key
+    )
+    instantiated_kwargs: dict[str, Any] = instantiate(raw_kwargs)
     if wrapper_kwargs_override:
         instantiated_kwargs.update(wrapper_kwargs_override)
 
