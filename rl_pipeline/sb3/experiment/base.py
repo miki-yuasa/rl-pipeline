@@ -51,7 +51,6 @@ class SB3ExperimentManager(
         callback: CallbackType
             The logger callback for the experiment manager.
         """
-        ...
 
     def end_run(self) -> None: ...
 

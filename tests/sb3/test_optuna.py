@@ -19,17 +19,12 @@ from rl_pipeline.gymnasium.config import WrapperConfig
 from rl_pipeline.sb3 import (
     SB3OptunaConfig,
     SB3OptunaDashboardConfig,
+    SB3OptunaParamConfig,
     SB3Pipeline,
-    SB3PipelineConfigReader,
+    SB3PipelineConfig,
+    SB3ReplicatePipelineConfig,
 )
 from rl_pipeline.sb3.callback import TrialEvalCallback, TrialLossCallback
-from rl_pipeline.sb3.config import SB3OptunaParamConfig, SB3PipelineConfig
-from rl_pipeline.sb3.config_reader import (
-    SB3PipelineConfigReader as SB3PipelineConfigReaderClass,
-)
-from rl_pipeline.sb3.config_reader import (
-    SB3ReplicatePipelineConfigReader,
-)
 from rl_pipeline.sb3.experiment.optuna import (
     decode_trial_params,
     deep_update,
@@ -75,13 +70,14 @@ class SB3OptunaTest(parameterized.TestCase):
         self.temp_dir = Path(self.create_tempdir().full_path)
 
     def _create_pipeline_config(self) -> SB3PipelineConfig:
-        config = SB3PipelineConfigReader.from_yaml(
+        config = SB3PipelineConfig.from_yaml(
             "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
-        ).to_config()
+        )
         self.assertIsNotNone(config.vec_config)
         assert config.vec_config is not None
         config.vec_config.vec_env_cls = DummyVecEnv
         config.vec_config.n_envs = 1
+        assert config.algo_config is not None
         config.algo_config.algorithm = DummyAlgorithm
         config.save_config.model_save_path = str(
             self.temp_dir / "models" / "final.zip"
@@ -175,28 +171,22 @@ class SB3OptunaTest(parameterized.TestCase):
         class DummyWrapper(gym.Wrapper):
             pass
 
-        class DummyPipelineReader(SB3PipelineConfigReaderClass):
-            def _to_wrapper_config(
-                self, replicate_signature: str = ""
-            ) -> WrapperConfig:
-                return WrapperConfig(
-                    wrapper_class=DummyWrapper,
-                    wrapper_kwargs={
-                        "model_path": f"out/{replicate_signature}/model.zip",
-                        "rep": "{rep_id}",
-                    },
-                )
-
-        single_reader = DummyPipelineReader.from_yaml(
+        single_cfg = SB3PipelineConfig.from_yaml(
             "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
         )
-        reader = SB3ReplicatePipelineConfigReader[DummyPipelineReader](
+        single_cfg.wrapper_config = WrapperConfig(
+            wrapper_class=DummyWrapper,
+            wrapper_kwargs={
+                "model_path": "out/{replicate_signature}/model.zip",
+                "rep": "{rep_id}",
+            },
+        )
+        replicate_config = SB3ReplicatePipelineConfig(
             replicate_config=ReplicateConfig(
                 num_replicates=3, replicate_signature="rep_{rep_id}"
             ),
-            single_pipeline_config=single_reader,
+            single_pipeline_config=single_cfg,
         )
-        replicate_config = reader.to_config()
         self.assertLen(replicate_config.ind_pipeline_configs, 3)
 
         c0 = replicate_config.ind_pipeline_configs[0]
@@ -215,6 +205,9 @@ class SB3OptunaTest(parameterized.TestCase):
             "out/rep_1/model.zip",
         )
 
+        assert c0.algo_config is not None
+        assert c1.algo_config is not None
+        assert c2.algo_config is not None
         s0 = c0.algo_config.algo_kwargs["seed"]
         s1 = c1.algo_config.algo_kwargs["seed"]
         s2 = c2.algo_config.algo_kwargs["seed"]

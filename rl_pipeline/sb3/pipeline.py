@@ -166,9 +166,9 @@ class SB3Pipeline(
         model = pipeline.train()
         eval_result = pipeline.evaluate(checkpoint="best")
 
-    Or load from YAML with a config reader::
+    Or load from YAML::
 
-        config = SB3PipelineConfigReader.from_yaml("path/to/pipeline.yaml").to_config()
+        config = SB3PipelineConfig.from_yaml("path/to/pipeline.yaml")
 
     Run Optuna hyperparameter search::
 
@@ -196,6 +196,13 @@ class SB3Pipeline(
 
     def __init__(self, config: SB3PipelineConfig, verbose: bool = True):
         super().__init__(config, verbose=verbose)
+
+        if config.env_config is None:
+            raise ValueError("env_config must be provided in SB3PipelineConfig.")
+        if config.algo_config is None:
+            raise ValueError("algo_config must be provided in SB3PipelineConfig.")
+        if config.callback_config is None:
+            raise ValueError("callback_config must be provided in SB3PipelineConfig.")
 
         self.save_config: SaveConfig = config.save_config
         self.learn_config: SB3LearnConfig = config.learn_config
@@ -707,7 +714,7 @@ class SB3Pipeline(
                         wrapper_kwargs=trial_wrapper_kwargs,
                     )
                     trial_env_loader = SB3EnvLoader(
-                        env_config=self.config.env_config,
+                        env_config=self.env_loader.env_config,
                         wrapper_config=trial_wrapper_config,
                         vec_config=self.config.vec_config,
                     )

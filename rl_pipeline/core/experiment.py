@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
-from .config import ConfigReader, YAMLReaderMixin
+from .config import YAMLReaderMixin
 from .typing import PipelineConfigType
 from .utils.io import get_class
 
@@ -22,9 +24,7 @@ class BaseExperimentManager(
         LoggedParamConfigType,
     ]
 ):
-    """
-    Base class for experiment managers such as Weights & Biases (wandb) and MLflow.
-    """
+    """Base class for experiment managers such as Weights & Biases (wandb) and MLflow."""
 
     def __init__(self, config: PipelineConfigType) -> None:
         self.config: PipelineConfigType = config
@@ -35,55 +35,26 @@ class BaseExperimentManager(
         manager_config: ManagerConfigType,
         logged_param_config: LoggedParamConfigType,
     ) -> RunType:
-        """
-        Start a new experiment run.
-
-        Parameters
-        ----------
-        manager_config
-            Configuration for the experiment manager.
-        logged_param_config
-            Configuration for the logged parameters.
-
-        Returns
-        -------
-        run: RunType
-            The started run for the current experiment.
-
-        """
+        """Start a new experiment run."""
         raise NotImplementedError("Subclasses must implement start_run method.")
 
     def end_run(self) -> None:
-        """
-        End the current experiment run.
-
-        Parameters
-        ----------
-        run : RunType
-            The run to be ended.
-
-        """
+        """End the current experiment run."""
         raise NotImplementedError("Subclasses must implement end_run method.")
 
 
-class ExperimentManagerConfig(BaseModel):
-    manager_class: type[BaseExperimentManager]  # pyrefly: ignore [implicit-any-type-argument]
+class ExperimentManagerConfig(BaseModel, YAMLReaderMixin):
+    """Configuration for an experiment manager."""
+
+    manager_class: type[BaseExperimentManager] | str
     manager_config: dict[str, Any]
 
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-class ExperimentManagerConfigReader(
-    BaseModel,
-    ConfigReader[ExperimentManagerConfig],
-    YAMLReaderMixin,
-):
-    manager_class: str
-    manager_config: dict[str, Any]
-
-    def to_config(self) -> ExperimentManagerConfig:
-        manager_class = get_class(self.manager_class)
-        assert manager_class is not None, (
-            f"Could not find experiment manager class for {self.manager_class}"
-        )
-        return ExperimentManagerConfig(
-            manager_class=manager_class, manager_config=self.manager_config
-        )
+    @field_validator("manager_class", mode="after")
+    @classmethod
+    def _resolve_manager_class(cls, val: Any) -> type[BaseExperimentManager]:
+        if isinstance(val, str):
+            resolved = get_class(val)
+            return resolved
+        return val

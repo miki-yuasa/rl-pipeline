@@ -71,7 +71,7 @@ class SB3WandbExperimentManager(
         # Copy manager_config
         manager_config_copy = copy.deepcopy(manager_config)
         if isinstance(manager_config_copy, dict):
-            if "name" in manager_config_copy and manager_config_copy["name"]:
+            if manager_config_copy.get("name"):
                 manager_config_copy["name"] += f"_{run_name_suffix}"
         else:
             if manager_config_copy.name:

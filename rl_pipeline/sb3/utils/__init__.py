@@ -3,8 +3,8 @@ from .eval import SuccessBuffer, SuccessBufferEval
 from .vis import record_replay
 
 __all__ = [
-    "make_vec_env",
     "SuccessBuffer",
     "SuccessBufferEval",
+    "make_vec_env",
     "record_replay",
 ]

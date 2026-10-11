@@ -6,8 +6,8 @@ from .stats import (
 )
 
 __all__ = [
-    "PolicyEvalStats",
     "BasicStats",
+    "PolicyEvalStats",
     "compute_basic_stats",
     "scaled_same_convolve",
 ]

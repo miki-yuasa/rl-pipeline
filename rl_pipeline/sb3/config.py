@@ -1,463 +1,323 @@
-"""Configuration models for SB3 training, evaluation, and hyperparameter tuning.
+from __future__ import annotations
 
-This module defines strongly typed Pydantic models used by the SB3 pipeline.
-It includes model/training/callback settings and Optuna-related tuning settings.
-"""
+"""Configuration models for SB3 training, evaluation, and replicate pipelines."""
 
-from collections.abc import Callable
-from typing import Any, Literal
+import os
+from copy import deepcopy
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
-from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import BaseCallback
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from rl_pipeline.core import ReplicateConfig, SaveConfig
-from rl_pipeline.gymnasium.config import MakeEnvConfig, WrapperConfig
-
-from .callback import (
-    CheckpointCallbackConfig,
-    EvalCallbackConfig,
-    VideoRecorderCallbackConfig,
+from rl_pipeline.core.config import YAMLReaderMixin
+from rl_pipeline.core.utils.io import format_large_number, get_class
+from rl_pipeline.gymnasium.config import (
+    MakeEnvConfig,
+    WrapperConfig,
+    load_wrapper_config,
 )
-from .experiment import SB3ExperimentManager
+
+from .algo_config import (
+    SB3AlgorithmConfig,
+    SB3LearnConfig,
+    class_to_string,
+)
+from .callback_config import (
+    ArbitraryCallbackConfig,
+    SB3CallbackConfig,
+)
+from .experiment.base import SB3ExperimentManager
+from .optuna_config import (
+    SB3OptunaConfig,
+    SB3OptunaDashboardConfig,
+    SB3OptunaParamConfig,
+)
 
 
-def class_to_string(cls: type) -> str:
-    """Serialize a Python class to a fully qualified import path.
-
-    Parameters
-    ----------
-    cls : type
-        Class object to serialize.
-
-    Returns
-    -------
-    class_path : str
-        Dotted module path in the form ``package.module.ClassName``.
-    """
-    return f"{cls.__module__}.{cls.__name__}"
-
-
-class MakeVecEnvConfig(BaseModel):
-    """Configuration for vectorized environment creation.
-
-    Attributes
-    ----------
-    n_envs : int
-        Number of parallel environments.
-    seed : int | None
-        Random seed used during environment construction.
-    start_index : int
-        Start index for seeded env IDs.
-    monitor_dir : str | None
-        Directory where monitor files are written.
-    vec_env_cls : type[SubprocVecEnv] | type[DummyVecEnv] | None
-        Vectorized environment implementation.
-    vec_env_kwargs : dict[str, Any] | None
-        Extra kwargs passed to the vec env class.
-    monitor_kwargs : dict[str, Any] | None
-        Extra kwargs for environment monitoring wrappers.
-    """
+class MakeVecEnvConfig(BaseModel, YAMLReaderMixin):
+    """Configuration for vectorized environment creation."""
 
     n_envs: int = Field(ge=1, default=1)
     seed: int | None = None
     start_index: int = Field(ge=0, default=0)
     monitor_dir: str | None = None
-    vec_env_cls: type[SubprocVecEnv] | type[DummyVecEnv] | None = SubprocVecEnv
+    vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None = SubprocVecEnv
     vec_env_kwargs: dict[str, Any] | None = None
     monitor_kwargs: dict[str, Any] | None = None
 
-    # allow arbitrary kwargs
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    @field_validator("vec_env_cls", mode="before")
+    def _resolve_vec_env_cls(
+        cls, val: Any
+    ) -> type[SubprocVecEnv | DummyVecEnv] | None:
+        if isinstance(val, str):
+            if val == "SubprocVecEnv":
+                return SubprocVecEnv
+            if val == "DummyVecEnv":
+                return DummyVecEnv
+            if "." in val:
+                resolved = get_class(val)
+                return resolved
+        return val
 
     @field_serializer("vec_env_cls", when_used="json")
     def serialize_vec_env_cls(
-        self, vec_env_cls: type[SubprocVecEnv | DummyVecEnv]
-    ) -> str:
-        """Serialize the vectorized env class for JSON output.
-
-        Parameters
-        ----------
-        vec_env_cls : type[SubprocVecEnv | DummyVecEnv]
-            Class to serialize.
-
-        Returns
-        -------
-        vec_env_cls_path : str
-            Import path string for the class.
-        """
-        return class_to_string(vec_env_cls)
+        self, vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None
+    ) -> str | None:
+        return class_to_string(vec_env_cls) if vec_env_cls else None
 
 
-class SB3AlgorithmConfig(BaseModel):
-    """Algorithm class and constructor kwargs for SB3 model creation.
-
-    Attributes
-    ----------
-    algorithm : type[BaseAlgorithm]
-        SB3-compatible algorithm class.
-    algo_kwargs : dict[str, Any]
-        Keyword arguments passed to the algorithm constructor.
-    """
-
-    algorithm: type[BaseAlgorithm]
-    algo_kwargs: dict[str, Any]
-
-    # For json serialization, `algorithm` should be in a string (e.b. "stable_baselines.PPO")
-    @field_serializer("algorithm", when_used="json")
-    def serialize_algorithm(self, algorithm: type[BaseAlgorithm]) -> str:
-        """Serialize the algorithm class for JSON output.
-
-        Parameters
-        ----------
-        algorithm : type[BaseAlgorithm]
-            Algorithm class to serialize.
-
-        Returns
-        -------
-        algorithm_path : str
-            Import path string for the algorithm class.
-        """
-        return class_to_string(algorithm)
-
-
-class SB3LearnConfig(BaseModel):
-    """Training-loop arguments forwarded to ``model.learn``.
-
-    Attributes
-    ----------
-    total_timesteps : int
-        Number of environment timesteps for training.
-    log_interval : int
-        Logging frequency used by SB3.
-    tb_log_name : str
-        TensorBoard run name.
-    reset_num_timesteps : bool
-        Whether to reset timestep counter before learning.
-    progress_bar : bool
-        Whether to display a progress bar during training.
-    """
-
-    total_timesteps: int = Field(ge=1, default=1_000_000)
-    # callback: MaybeCallback = None
-    log_interval: int = Field(ge=0, default=1)
-    tb_log_name: str = "run"
-    reset_num_timesteps: bool = True
-    progress_bar: bool = False
-
-    # allow arbitrary types
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class ArbitraryCallbackConfig(BaseModel):
-    """Configuration for attaching user-defined SB3 callbacks.
-
-    Attributes
-    ----------
-    callback_class : type[BaseCallback]
-        Callback class to instantiate.
-    callback_kwargs : dict[str, Any]
-        Initialization kwargs for ``callback_class``.
-    """
-
-    callback_class: type[BaseCallback]
-    callback_kwargs: dict[str, Any] = Field(default_factory=dict)
-
-    @field_serializer("callback_class", when_used="json")
-    def serialize_callback_class(self, callback_class: type[BaseCallback]) -> str:
-        """Serialize callback class for JSON output.
-
-        Parameters
-        ----------
-        callback_class : type[BaseCallback]
-            Callback class to serialize.
-
-        Returns
-        -------
-        callback_class_path : str
-            Import path string for the callback class.
-        """
-        return class_to_string(callback_class)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class SB3CallbackConfig(BaseModel):
-    """Grouped callback settings used by the SB3 pipeline.
-
-    Attributes
-    ----------
-    eval_callback_config : EvalCallbackConfig
-        Evaluation callback configuration.
-    ckpt_callback_config : CheckpointCallbackConfig
-        Checkpoint callback configuration.
-    video_recorder_callback_config : VideoRecorderCallbackConfig | None
-        Optional video recording callback configuration.
-    arbitrary_callback_configs : list[ArbitraryCallbackConfig]
-        Additional user-defined callbacks.
-    """
-
-    eval_callback_config: EvalCallbackConfig
-    ckpt_callback_config: CheckpointCallbackConfig | None = None
-    video_recorder_callback_config: VideoRecorderCallbackConfig | None = None
-    arbitrary_callback_configs: list[ArbitraryCallbackConfig] = Field(
-        default_factory=list
-    )
-
-
-class SB3ExperimentManagerConfig(BaseModel):
-    """Configuration for experiment manager integration.
-
-    Attributes
-    ----------
-    manager_class : type[SB3ExperimentManager]
-        Experiment manager implementation class.
-    manager_config : dict[str, Any]
-        Manager initialization arguments.
-    callback_config : dict[str, Any]
-        Manager-specific callback configuration.
-    """
+class SB3ExperimentManagerConfig(BaseModel, YAMLReaderMixin):
+    """Configuration for experiment manager integration."""
 
     manager_class: type[SB3ExperimentManager]
-    manager_config: dict[str, Any]
-    callback_config: dict[str, Any]
+    manager_config: dict[str, Any] = Field(default_factory=dict)
+    callback_config: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    @field_validator("manager_class", mode="before")
+    def _resolve_manager_class(cls, val: Any) -> type[SB3ExperimentManager]:
+        if isinstance(val, str):
+            resolved = get_class(val)
+            return resolved
+        return val
 
     @field_serializer("manager_class", when_used="json")
-    def serialize_manager_class(self, manager_class: type[SB3ExperimentManager]) -> str:
-        """Serialize manager class for JSON output.
-
-        Parameters
-        ----------
-        manager_class : type[SB3ExperimentManager]
-            Manager class to serialize.
-
-        Returns
-        -------
-        manager_class_path : str
-            Import path string for the manager class.
-        """
-        return manager_class.__module__ + "." + manager_class.__name__
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    def serialize_manager_class(
+        self, manager_class: type[SB3ExperimentManager]
+    ) -> str:
+        return class_to_string(manager_class)
 
 
-class SB3OptunaDashboardConfig(BaseModel):
-    """Runtime settings for optional ``optuna-dashboard`` launch.
+class SB3ModelConfig(BaseModel, YAMLReaderMixin):
+    """Bundled model-centric configuration loaded from model config files."""
 
-    Attributes
-    ----------
-    launch : bool
-        Whether to start the dashboard subprocess automatically.
-    host : str | None
-        Optional host passed to dashboard CLI.
-    port : int | None
-        Optional port passed to dashboard CLI.
-    """
+    algo_config: SB3AlgorithmConfig
+    learn_config: SB3LearnConfig = Field(default_factory=SB3LearnConfig)
+    vec_config: MakeVecEnvConfig | None = None
+    callback_config: SB3CallbackConfig
 
-    launch: bool = False
-    host: str | None = None
-    port: int | None = Field(default=None, ge=1)
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
-class SB3OptunaParamConfig(BaseModel):
-    """Declarative search-space specification for one tunable parameter.
-
-    Attributes
-    ----------
-    name : str
-        Optuna trial parameter name.
-    suggest_type : Literal["float", "int", "categorical", "pow2_int"]
-        Suggestion strategy used to sample this parameter.
-    target : str | None
-        Destination key in algorithm kwargs (supports dotted paths).
-    low : float | int | None
-        Lower bound for numeric suggestion types.
-    high : float | int | None
-        Upper bound for numeric suggestion types.
-    step : float | int | None
-        Step size for integer/float suggestion types.
-    log : bool
-        Whether to sample numeric values in log space.
-    choices : list[Any] | None
-        Choice list for categorical parameters.
-    one_minus : bool
-        Whether to transform sampled value as ``1.0 - value``.
-    value_mapping : dict[str, Any] | None
-        Optional mapping from categorical values to runtime objects.
-    """
-
-    name: str
-    suggest_type: Literal["float", "int", "categorical", "pow2_int"]
-    target: str | None = None
-    low: float | int | None = None
-    high: float | int | None = None
-    step: float | int | None = None
-    log: bool = False
-    choices: list[Any] | None = None
-    one_minus: bool = False
-    value_mapping: dict[str, Any] | None = None
-
-
-class SB3OptunaConfig(BaseModel):
-    """Optuna optimization settings used by :meth:`SB3Pipeline.optimize`.
-
-    Attributes
-    ----------
-    storage_url : str | None
-        Optuna storage backend URL.
-    study_name : str | None
-        Optional study name in storage.
-    direction : Literal["maximize", "minimize"]
-        Optimization direction for objective value.
-    n_trials : int
-        Number of trials to run.
-    timeout : int | None
-        Optional timeout (seconds) for optimization.
-    n_jobs : int
-        Number of parallel workers used for optimization.
-    parallel_backend : Literal["process", "thread"]
-        Parallel execution backend. ``"process"`` is default.
-    n_startup_trials : int
-        Number of startup trials before TPE-based decisions.
-    n_warmup_steps : int
-        Number of evaluation steps before pruning can start.
-    n_evaluations : int
-        Number of evaluations during each trial.
-    n_eval_episodes : int
-        Number of episodes per evaluation.
-    deterministic_eval : bool
-        Whether evaluation uses deterministic actions.
-    total_timesteps : int | None
-        Optional per-trial timestep override.
-    eval_freq : int | None
-        Optional explicit evaluation interval in timesteps.
-    sample_params_fn : Callable[[Any], dict[str, Any]] | None
-        Optional custom sampling callable.
-    tune_params : list[SB3OptunaParamConfig]
-        Declarative search-space definitions.
-    dashboard : SB3OptunaDashboardConfig
-        Dashboard launch settings.
-    """
-
-    storage_url: str | None = None
-    study_name: str | None = None
-    direction: Literal["maximize", "minimize"] = "maximize"
-    metric: str = "mean_reward"
-    n_trials: int = Field(ge=1, default=50)
-    timeout: int | None = Field(default=None, ge=1)
-    n_jobs: int = Field(ge=1, default=1)
-    parallel_backend: Literal["process", "thread"] = "process"
-    n_startup_trials: int = Field(ge=0, default=5)
-    n_warmup_steps: int = Field(ge=0, default=0)
-    n_evaluations: int = Field(ge=1, default=2)
-    n_eval_episodes: int = Field(ge=1, default=3)
-    deterministic_eval: bool = False
-    total_timesteps: int | None = Field(default=None, ge=1)
-    eval_freq: int | None = Field(default=None, ge=1)
-    sample_params_fn: Callable[[Any], dict[str, Any]] | None = None
-    tune_params: list[SB3OptunaParamConfig] = Field(default_factory=list)
-    dashboard: SB3OptunaDashboardConfig = SB3OptunaDashboardConfig()
-
-    @field_serializer("sample_params_fn", when_used="json")
-    def serialize_sample_params_fn(
-        self, sample_params_fn: Callable[[Any], dict[str, Any]] | None
-    ) -> str | None:
-        """Serialize custom sampling callable for JSON output.
-
-        Parameters
-        ----------
-        sample_params_fn : Callable[[Any], dict[str, Any]] | None
-            Custom sampling callable.
-
-        Returns
-        -------
-        sample_params_fn_path : str | None
-            Import path for callable or ``None`` if unset.
-        """
-        if sample_params_fn is None:
-            return None
-        return f"{sample_params_fn.__module__}.{sample_params_fn.__name__}"
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class SB3PipelineConfig(BaseModel):
-    """Top-level configuration for a single SB3 pipeline run.
-
-    Attributes
-    ----------
-    device : str
-        Target compute device string (for example ``cuda:0`` or ``cpu``).
-    experiment_id : str
-        Identifier used to organize saved artifacts.
-    retrain_model : bool
-        Whether existing saved models should be retrained.
-    save_config : SaveConfig
-        Output path configuration.
-    env_config : MakeEnvConfig
-        Base environment construction config.
-    wrapper_config : WrapperConfig | None
-        Optional single-env wrapper configuration.
-    vec_config : MakeVecEnvConfig | None
-        Optional vectorized environment configuration.
-    algo_config : SB3AlgorithmConfig
-        Algorithm class and constructor kwargs.
-    learn_config : SB3LearnConfig
-        ``model.learn`` training settings.
-    callback_config : SB3CallbackConfig
-        Callback settings.
-    experiment_manager_config : SB3ExperimentManagerConfig | None
-        Optional run manager integration settings.
-    optuna_config : SB3OptunaConfig | None
-        Optional optimization configuration for hyperparameter search.
-    """
+class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
+    """Top-level configuration for a single SB3 pipeline run."""
 
     device: str = "cuda:0"
     experiment_id: str = ""
-    retrain_model: bool = True
-    save_config: SaveConfig
-    env_config: MakeEnvConfig
+    retrain_model: bool = False
+    save_config: SaveConfig = Field(default_factory=SaveConfig)
+    env_config: MakeEnvConfig | None = None
     wrapper_config: WrapperConfig | None = None
     vec_config: MakeVecEnvConfig | None = None
-    algo_config: SB3AlgorithmConfig
-    learn_config: SB3LearnConfig
-    callback_config: SB3CallbackConfig
+    algo_config: SB3AlgorithmConfig | None = None
+    learn_config: SB3LearnConfig = Field(default_factory=SB3LearnConfig)
+    callback_config: SB3CallbackConfig | None = None
     experiment_manager_config: SB3ExperimentManagerConfig | None = None
     optuna_config: SB3OptunaConfig | None = None
 
+    config_dir: str | None = None
+    env_config_file: str | None = None
+    wrapper_class: type[Any] | str | None = None
+    wrapper_config_file: str | None = None
+    wrapper_kwargs: dict[str, Any] | None = None
+    model_config_file: str | None = None
 
-class SB3ModelConfig(BaseModel):
-    """Bundled model-centric configuration loaded from model config files.
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    Attributes
-    ----------
-    algo_config : SB3AlgorithmConfig
-        Algorithm class and kwargs.
-    learn_config : SB3LearnConfig
-        Training loop settings.
-    vec_config : MakeVecEnvConfig | None
-        Optional vectorized environment settings.
-    callback_config : SB3CallbackConfig
-        Callback configuration.
-    """
+    @field_validator("device", mode="before")
+    def _normalize_device(cls, val: Any) -> str:
+        if isinstance(val, int):
+            return f"cuda:{val}"
+        return str(val)
 
-    algo_config: SB3AlgorithmConfig
-    learn_config: SB3LearnConfig
-    vec_config: MakeVecEnvConfig | None = None
-    callback_config: SB3CallbackConfig
+    def resolve(self, replicate_signature: str = "") -> Self:
+        """Resolve nested file references and propagate artifact paths."""
+        if self.env_config is None and self.env_config_file:
+            env_path = (
+                os.path.join(self.config_dir, self.env_config_file)
+                if self.config_dir
+                else self.env_config_file
+            )
+            self.env_config = MakeEnvConfig.from_yaml(env_path)
+
+        if self.wrapper_config is None and self.wrapper_config_file:
+            self.wrapper_config = load_wrapper_config(
+                self.wrapper_config_file,
+                config_dir=self.config_dir,
+                wrapper_kwargs_override=self.wrapper_kwargs,
+                default_wrapper_class=self.wrapper_class,
+            )
+
+        if self.model_config_file:
+            model_path = (
+                os.path.join(self.config_dir, self.model_config_file)
+                if self.config_dir
+                else self.model_config_file
+            )
+            model_cfg = SB3ModelConfig.from_yaml(model_path)
+            if self.algo_config is None:
+                self.algo_config = model_cfg.algo_config
+            if self.learn_config == SB3LearnConfig():
+                self.learn_config = model_cfg.learn_config
+            if self.vec_config is None:
+                self.vec_config = model_cfg.vec_config
+            if self.callback_config is None:
+                self.callback_config = model_cfg.callback_config
+
+        model_name_suffix = (
+            format_large_number(self.learn_config.total_timesteps)
+            if self.learn_config
+            else ""
+        )
+        self.save_config = self.save_config.resolve(
+            experiment_id=self.experiment_id,
+            model_name_suffix=model_name_suffix,
+            replicate_signature=replicate_signature,
+        )
+
+        if self.vec_config is not None and not self.vec_config.monitor_dir:
+            self.vec_config.monitor_dir = self.save_config.monitor_save_dir
+
+        if self.callback_config is not None:
+            eval_cb = self.callback_config.eval_callback_config
+            if not eval_cb.best_model_save_path:
+                eval_cb.best_model_save_path = self.save_config.eval_save_dir
+            if not eval_cb.log_path:
+                eval_cb.log_path = self.save_config.eval_save_dir
+            if (
+                self.callback_config.ckpt_callback_config
+                and not self.callback_config.ckpt_callback_config.save_path
+            ):
+                self.callback_config.ckpt_callback_config.save_path = (
+                    self.save_config.model_save_dir
+                )
+            if (
+                self.callback_config.video_recorder_callback_config
+                and not self.callback_config.video_recorder_callback_config.save_dir
+            ):
+                self.callback_config.video_recorder_callback_config.save_dir = (
+                    self.save_config.animation_save_path
+                )
+
+        return self
+
+    @model_validator(mode="after")
+    def _auto_resolve(self) -> Self:
+        return self.resolve()
 
 
-class SB3ReplicatePipelineConfig(BaseModel):
-    """Configuration for running multiple independent SB3 pipeline replicas.
+def _format_templates_recursive(
+    data: Any,
+    replicate_signature: str,
+    rep_id: int,
+) -> Any:
+    """Format template variables recursively in strings, dicts, and lists."""
+    if isinstance(data, str):
+        try:
+            return data.format(
+                replicate_signature=replicate_signature, rep_id=rep_id
+            )
+        except (KeyError, IndexError, ValueError):
+            return data
+    if isinstance(data, dict):
+        return {
+            k: _format_templates_recursive(v, replicate_signature, rep_id)
+            for k, v in data.items()
+        }
+    if isinstance(data, list):
+        return [
+            _format_templates_recursive(v, replicate_signature, rep_id)
+            for v in data
+        ]
+    return data
 
-    Attributes
-    ----------
-    replicate_config : ReplicateConfig
-        Replica generation policy.
-    ind_pipeline_configs : list[SB3PipelineConfig]
-        Fully resolved configs for each replica run.
-    """
+
+class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
+    """Configuration for running multiple independent SB3 pipeline replicas."""
 
     replicate_config: ReplicateConfig
-    ind_pipeline_configs: list[SB3PipelineConfig]
+    single_pipeline_config: SB3PipelineConfig | dict[str, Any] | None = None
+    ind_pipeline_configs: list[SB3PipelineConfig] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    def build_replicates(self) -> Self:
+        """Build independent pipeline configurations from single_pipeline_config."""
+        if not self.single_pipeline_config or self.ind_pipeline_configs:
+            return self
+
+        base_cfg = (
+            self.single_pipeline_config
+            if isinstance(self.single_pipeline_config, SB3PipelineConfig)
+            else SB3PipelineConfig.from_dict(self.single_pipeline_config)
+        )
+
+        replicate_pipeline_configs: list[SB3PipelineConfig] = []
+        for rep_id in range(self.replicate_config.num_replicates):
+            actual_rep_id = rep_id + self.replicate_config.replicate_start_id
+            rep_signature = self.replicate_config.replicate_signature.format(
+                rep_id=actual_rep_id
+            )
+
+            replica = deepcopy(base_cfg)
+            replica.resolve(replicate_signature=rep_signature)
+
+            if replica.wrapper_config and replica.wrapper_config.wrapper_kwargs:
+                replica.wrapper_config.wrapper_kwargs = (
+                    _format_templates_recursive(
+                        replica.wrapper_config.wrapper_kwargs,
+                        replicate_signature=rep_signature,
+                        rep_id=actual_rep_id,
+                    )
+                )
+
+            base_seed = (
+                replica.algo_config.algo_kwargs.get("seed")
+                if replica.algo_config
+                else None
+            )
+            if base_seed is None and replica.vec_config:
+                base_seed = replica.vec_config.seed
+            if base_seed is None:
+                base_seed = 10
+            rep_seed = int(base_seed) + rep_id * 10
+            if replica.algo_config:
+                replica.algo_config.algo_kwargs["seed"] = rep_seed
+            if replica.vec_config:
+                replica.vec_config.seed = rep_seed
+
+            replicate_pipeline_configs.append(replica)
+
+        self.ind_pipeline_configs = replicate_pipeline_configs
+        return self
+
+    @model_validator(mode="after")
+    def _auto_build(self) -> Self:
+        return self.build_replicates()
+
+
+__all__ = [
+    "ArbitraryCallbackConfig",
+    "MakeVecEnvConfig",
+    "SB3AlgorithmConfig",
+    "SB3CallbackConfig",
+    "SB3ExperimentManagerConfig",
+    "SB3LearnConfig",
+    "SB3ModelConfig",
+    "SB3OptunaConfig",
+    "SB3OptunaDashboardConfig",
+    "SB3OptunaParamConfig",
+    "SB3PipelineConfig",
+    "SB3ReplicatePipelineConfig",
+]

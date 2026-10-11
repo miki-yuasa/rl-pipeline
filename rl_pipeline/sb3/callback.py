@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -5,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 import gymnasium as gym
 import numpy as np
 from gymnasium import Env
-from pydantic import BaseModel, ConfigDict, Field
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import VecEnv, sync_envs_normalization
@@ -90,7 +91,7 @@ class SuccessEvalCallback(EvalCallback):
         """Executes evaluation on eval_env and logs metrics."""
         continue_training = True
 
-        # Sync training and eval env if there is VecNormalize
+        # Sync training and eval env if there is VecNormalize.
         if self.model.get_vec_normalize_env() is not None:
             try:
                 sync_envs_normalization(self.training_env, self.eval_env)
@@ -101,7 +102,7 @@ class SuccessEvalCallback(EvalCallback):
                     "and warning above."
                 ) from e
 
-        # Reset success rate buffer
+        # Reset success rate buffer.
         self.success_buffer: SuccessBuffer = SuccessBuffer()
 
         episode_rewards, episode_lengths = evaluate_policy(
@@ -127,14 +128,14 @@ class SuccessEvalCallback(EvalCallback):
             self.evaluations_length.append(episode_lengths)
 
             kwargs: dict[str, Any] = {}
-            # Save success log if present
+            # Save success log if present.
             if len(success_buffer_result.episode_successes) > 0:
                 self.evaluations_successes.append(
                     success_buffer_result.episode_successes
                 )
                 kwargs["successes"] = self.evaluations_successes
 
-            # Save failures log if present
+            # Save failures log if present.
             if len(success_buffer_result.episode_failures) > 0:
                 self.evaluations_failures.append(
                     success_buffer_result.episode_failures
@@ -167,7 +168,7 @@ class SuccessEvalCallback(EvalCallback):
             print(
                 f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}"
             )
-        # Add to current Logger
+        # Add to current Logger.
         self.logger.record("eval/mean_reward", float(mean_reward))
         self.logger.record("eval/mean_ep_length", mean_ep_length)
 
@@ -195,7 +196,7 @@ class SuccessEvalCallback(EvalCallback):
                 print(f"Failure rate: {100 * failure_rate:.2f}%")
             self.logger.record("eval/failure_rate", failure_rate)
 
-        # Dump log so the evaluation results are printed with the correct timestep
+        # Dump log so the evaluation results are printed with the correct timestep.
         self.logger.record(
             "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
         )
@@ -209,11 +210,11 @@ class SuccessEvalCallback(EvalCallback):
                     os.path.join(self.best_model_save_path, "best_model")
                 )
             self.best_mean_reward = float(mean_reward)
-            # Trigger callback on new best model, if needed
+            # Trigger callback on new best model, if needed.
             if self.callback_on_new_best is not None:
                 continue_training = self.callback_on_new_best.on_step()
 
-        # Trigger callback after every evaluation, if needed
+        # Trigger callback after every evaluation, if needed.
         if self.callback is not None:
             continue_training = continue_training and self._on_event()
 
@@ -298,7 +299,7 @@ class TrialEvalCallback(SuccessEvalCallback):
     def __init__(
         self,
         eval_env: gym.Env | VecEnv,
-        trial: "optuna.Trial",
+        trial: optuna.Trial,
         n_eval_episodes: int = 5,
         eval_freq: int = 10_000,
         best_model_save_path: str | None = None,
@@ -353,7 +354,7 @@ class TrialLossCallback(BaseCallback):
 
     def __init__(
         self,
-        trial: "optuna.Trial",
+        trial: optuna.Trial,
         metric: str = "loss/total",
         eval_freq: int = 1000,
         verbose: int = 0,
@@ -429,72 +430,21 @@ class TrialLossCallback(BaseCallback):
                     self.last_loss = final_val
 
 
-class EvalCallbackConfig(BaseModel):
-    """
-    Configuration for the Stable Baselines3 evaluation callback.
-    """
+from .callback_config import (
+    CheckpointCallbackConfig,
+    EvalCallbackConfig,
+    VideoRecorderCallbackConfig,
+)
 
-    eval_callback_cls: type[EvalCallback] = SuccessEvalCallback
-    eval_freq: int = Field(
-        ge=0,
-        description="""Frequency of evaluation in timesteps. 
-        When using multiple environments, each call to env.step() will effectively correspond to n_envs steps. 
-        To account for that, you can use eval_freq = max(eval_freq // n_envs, 1)""",
-    )
-    n_eval_episodes: int = Field(
-        ge=1, description="Number of episodes to evaluate the model."
-    )
-    log_path: str = Field(
-        default="eval",
-        description="Path to the directory where evaluation logs will be saved.",
-    )
-    best_model_save_path: str | None = Field(
-        default=None,
-        description="Path to save the best model during evaluation.",
-    )
-    deterministic: bool = Field(
-        default=False,
-        description="Whether to use deterministic actions during evaluation.",
-    )
-    render: bool = Field(
-        default=False,
-        description="Whether to render the environment during evaluation.",
-    )
+__all__ = [
+    "CheckpointCallbackConfig",
+    "EvalCallbackConfig",
+    "SuccessBuffer",
+    "SuccessBufferEval",
+    "SuccessEvalCallback",
+    "TrialEvalCallback",
+    "TrialLossCallback",
+    "VideoRecorderCallback",
+    "VideoRecorderCallbackConfig",
+]
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class CheckpointCallbackConfig(BaseModel):
-    """
-    Configuration for the Stable Baselines3 checkpoint callback.
-    """
-
-    save_freq: int = Field(
-        ge=1, description="Frequency of saving the model in timesteps."
-    )
-    save_path: str = Field(
-        default="ckpts", description="Path to save the checkpoints."
-    )
-    name_prefix: str = Field(
-        default="ckpt", description="Prefix for the checkpoint filenames."
-    )
-    save_replay_buffer: bool = Field(
-        default=False, description="Whether to save replay files."
-    )
-    verbose: int = Field(
-        default=0, description="Verbosity level of the callback."
-    )
-
-
-class VideoRecorderCallbackConfig(BaseModel):
-    """
-    Configuration for the Stable Baselines3 video recorder callback.
-    """
-
-    render_freq: int = Field(ge=1, default=100)
-    save_dir: str = "out/animation"
-    name_prefix: str = "rl_model"
-    file_ext: str = "gif"
-    deterministic: bool = False
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)

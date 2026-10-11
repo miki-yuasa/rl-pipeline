@@ -9,7 +9,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
 
-from rl_pipeline.sb3 import SB3Pipeline, SB3PipelineConfigReader
+from rl_pipeline.sb3 import SB3Pipeline, SB3PipelineConfig
 from rl_pipeline.sb3.callback import (
     CheckpointCallbackConfig,
     EvalCallbackConfig,
@@ -18,7 +18,6 @@ from rl_pipeline.sb3.callback import (
 from rl_pipeline.sb3.config import (
     ArbitraryCallbackConfig,
     SB3CallbackConfig,
-    SB3PipelineConfig,
 )
 from rl_pipeline.sb3.pipeline import init_callback
 
@@ -36,10 +35,10 @@ class SB3PipelineTest(absltest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.temp_dir = Path(self.create_tempdir().full_path)
-        self.config: SB3PipelineConfig = SB3PipelineConfigReader.from_yaml(
+        self.config: SB3PipelineConfig = SB3PipelineConfig.from_yaml(
             "tests/sb3/assets/configs/cartpole_pipeline_config.yaml"
-        ).to_config()
-        # Point paths to isolated temp directory and disable external experiment managers
+        )
+        # Point paths to isolated temp directory and disable external experiment managers.
         self.config.save_config.model_save_path = str(
             self.temp_dir / "models" / "final.zip"
         )
