@@ -78,10 +78,16 @@ class SB3ConfigTest(absltest.TestCase):
             for cfg in configs
             if cfg.wrapper_config is not None
         ]
+        seeds = [
+            cfg.algo_config.algo_kwargs["seed"]
+            for cfg in configs
+            if cfg.algo_config is not None
+        ]
         self.assertEqual(
             paths,
             ["out/rep_0/model.zip", "out/rep_1/model.zip"],
         )
+        self.assertEqual(seeds, [10, 20])
 
 
 if __name__ == "__main__":

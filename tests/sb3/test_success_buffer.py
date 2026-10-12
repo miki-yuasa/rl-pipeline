@@ -9,7 +9,7 @@ class SuccessBufferTest(absltest.TestCase):
     def test_computes_goal_wise_success_rate(self) -> None:
         success_buffer = SuccessBuffer()
 
-        # Goal A: 1/2 success
+        # Goal A: 1/2 success.
         success_buffer._log_success_callback(
             {"info": {"is_success": True, "goal_name": "goal_a"}, "done": True},
             {},
@@ -22,7 +22,7 @@ class SuccessBufferTest(absltest.TestCase):
             {},
         )
 
-        # Goal B: 2/2 success
+        # Goal B: 2/2 success.
         success_buffer._log_success_callback(
             {"info": {"is_success": True, "goal_name": "goal_b"}, "done": True},
             {},
@@ -32,7 +32,7 @@ class SuccessBufferTest(absltest.TestCase):
             {},
         )
 
-        # No goal_name should not affect goal-wise stats
+        # No goal_name should not affect goal-wise stats.
         success_buffer._log_success_callback(
             {"info": {"is_success": True}, "done": True},
             {},
