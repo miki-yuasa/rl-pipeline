@@ -11,7 +11,7 @@ from rl_pipeline.gymnasium.config import MakeEnvConfig, load_wrapper_config
 
 
 def _resolve_config_dir(
-    data_by_key: MutableMapping[str, Any],
+    data_by_key: Mapping[str, Any],
     base_dir: Path | str | None = None,
 ) -> str | None:
     """Extract configuration directory from dictionary or fallback to base directory.
@@ -23,10 +23,12 @@ def _resolve_config_dir(
     Returns:
         Resolved base directory string, or None.
     """
-    config_dir = data_by_key.pop("config_dir", None)
+    config_dir = data_by_key.get("config_dir")
     if config_dir is not None:
         return str(config_dir)
-    return str(base_dir) if base_dir is not None else None
+    if base_dir is not None:
+        return str(base_dir)
+    return None
 
 
 def _resolve_env_config(
@@ -115,5 +117,6 @@ def ingest_pipeline_config_dict(
     _resolve_env_config(resolved_by_key, config_dir)
     _resolve_model_config(resolved_by_key, config_dir)
     _resolve_wrapper_config(resolved_by_key, config_dir)
+    resolved_by_key.pop("config_dir", None)
 
     return resolved_by_key
