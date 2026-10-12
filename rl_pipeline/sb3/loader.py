@@ -41,14 +41,8 @@ class SB3EnvLoader(
     ):
         env: Env[ObsType, ActType] = gym.make(**self.env_config.make_env_args())
         if self.wrapper_config:
-            wrapped_env: Wrapper[
-                WrapperObsType, WrapperActType, ObsType, ActType
-            ] = self.wrapper_config.wrapper_class(
-                env, **self.wrapper_config.wrapper_kwargs
-            )
-            return wrapped_env
-        else:
-            return env
+            return self.wrapper_config.wrap(env)
+        return env
 
     def vec_env(
         self, monitor_dir: str | None | object = _DEFAULT_MONITOR_DIR
@@ -132,7 +126,7 @@ class SB3ModelLoader(
     ) -> BaseAlgorithm:
         """Load the model from the checkpoint."""
 
-        # if there is a file with number extension (e.g. _1.zip), pick the one with the largest number
+        # if there is a file with number extension (e.g. _1.zip), pick the one with the largest number.
         modified_filepath: str = get_file_with_largest_number(filepath)
 
         return self.algo_config.algorithm.load(

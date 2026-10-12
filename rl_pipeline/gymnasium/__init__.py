@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .config import (
+    BaseWrapperConfig,
     GymEnvConfig,
     MakeEnvConfig,
     WrapperConfig,
@@ -9,6 +10,7 @@ from .config import (
 from .loader import GymEnvLoader
 
 __all__ = [
+    "BaseWrapperConfig",
     "GymEnvConfig",
     "GymEnvLoader",
     "MakeEnvConfig",

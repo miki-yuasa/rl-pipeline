@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 from unittest import mock
 
 from absl.testing import absltest
+from gymnasium import Env, Wrapper
 from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 
+from rl_pipeline.gymnasium import (
+    BaseWrapperConfig,
+    WrapperConfig,
+)
 from rl_pipeline.sb3 import (
     ArbitraryCallbackConfig,
     SB3AlgorithmConfig,
@@ -31,7 +36,22 @@ def _mock_get_class(path: str) -> type[BaseAlgorithm]:
         raise AttributeError("missing in sb3")
     if path == "sb3_contrib.RecurrentPPO":
         return _DummyAlgo
-    raise AssertionError(f"Unexpected class path: {path}")
+    raise ValueError(f"Unexpected class path: {path}")
+
+
+class _DummyWrapper(Wrapper[Any, Any, Any, Any]):
+    """Dummy wrapper for testing BaseWrapperConfig."""
+
+    def __init__(self, env: Env[Any, Any], factor: int = 1):
+        super().__init__(env)
+        self.factor = factor
+
+
+class _DummyWrapperConfig(BaseWrapperConfig):
+    """Configuration model for dummy wrapper."""
+
+    wrapper_class: ClassVar[type[Wrapper]] = _DummyWrapper
+    factor: int = 2
 
 
 class SB3ConfigTest(absltest.TestCase):
@@ -167,6 +187,21 @@ class SB3ConfigTest(absltest.TestCase):
             paths,
             ["out/rep_0/model.zip", "out/rep_1/model.zip"],
         )
+
+    def test_base_wrapper_config_to_wrapper_config(self) -> None:
+        cfg = _DummyWrapperConfig(factor=5)
+        wrap_cfg = cfg.to_wrapper_config()
+        self.assertIs(wrap_cfg.wrapper_class, _DummyWrapper)
+        self.assertEqual(wrap_cfg.wrapper_kwargs, {"factor": 5})
+
+    def test_wrapper_config_wrap_applies_wrapper(self) -> None:
+        mock_env = mock.MagicMock(spec=Env)
+        wrap_cfg = WrapperConfig(
+            wrapper_class=_DummyWrapper,
+            wrapper_kwargs={"factor": 4},
+        )
+        wrapped = wrap_cfg.wrap(mock_env)
+        self.assertIsInstance(wrapped, _DummyWrapper)
 
 
 if __name__ == "__main__":
