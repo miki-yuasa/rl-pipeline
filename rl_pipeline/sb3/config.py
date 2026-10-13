@@ -270,12 +270,11 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
                 replica = SB3PipelineConfig.from_dict(replica_dict)
                 replica.resolve(replicate_signature=rep_signature)
             else:
-                is_pipeline_cfg = isinstance(
-                    self.single_pipeline_config, SB3PipelineConfig
-                )
                 base_cfg = (
                     self.single_pipeline_config
-                    if is_pipeline_cfg
+                    if isinstance(
+                        self.single_pipeline_config, SB3PipelineConfig
+                    )
                     else SB3PipelineConfig.from_dict(
                         self.single_pipeline_config
                     )
@@ -284,12 +283,10 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
                 replica.resolve(replicate_signature=rep_signature)
                 wrap_cfg = replica.wrapper_config
                 if wrap_cfg and wrap_cfg.wrapper_kwargs:
-                    wrap_cfg.wrapper_kwargs = (
-                        _format_templates_recursive(
-                            wrap_cfg.wrapper_kwargs,
-                            replicate_signature=rep_signature,
-                            rep_id=actual_rep_id,
-                        )
+                    wrap_cfg.wrapper_kwargs = _format_templates_recursive(
+                        wrap_cfg.wrapper_kwargs,
+                        replicate_signature=rep_signature,
+                        rep_id=actual_rep_id,
                     )
 
             base_seed = (

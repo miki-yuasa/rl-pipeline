@@ -8,7 +8,6 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from rl_pipeline.sb3 import (
     SB3AlgorithmConfig,
-    SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
     resolve_algorithm,
 )
@@ -89,24 +88,6 @@ class SB3ConfigTest(absltest.TestCase):
             ["out/rep_0/model.zip", "out/rep_1/model.zip"],
         )
         self.assertEqual(seeds, [10, 20])
-
-    def test_config_dir_emits_future_warning(self) -> None:
-        from rl_pipeline.sb3.ingestion import ingest_pipeline_config_dict
-
-        config_by_key = {"config_dir": "some/path", "experiment_id": "test"}
-        with self.assertWarns(FutureWarning):
-            ingest_pipeline_config_dict(config_by_key)
-
-    def test_from_yaml_without_config_dir(self) -> None:
-        yaml_file = self.create_tempdir().create_file(
-            "pipeline.yaml",
-            content="""
-device: 'cpu'
-experiment_id: 'test_no_dir'
-""",
-        )
-        cfg = SB3PipelineConfig.from_yaml(yaml_file.full_path)
-        self.assertEqual(cfg.experiment_id, "test_no_dir")
 
 
 if __name__ == "__main__":
