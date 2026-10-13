@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TypeVar
 from unittest import mock
 
 from absl.testing import absltest
@@ -8,9 +9,12 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from rl_pipeline.sb3 import (
     SB3AlgorithmConfig,
+    SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
     resolve_algorithm,
 )
+
+_T = TypeVar("_T")
 
 
 class _DummyAlgo(BaseAlgorithm):
@@ -23,6 +27,12 @@ def _mock_get_class(path: str) -> type[BaseAlgorithm]:
     if path == "sb3_contrib.RecurrentPPO":
         return _DummyAlgo
     raise ValueError(f"Unexpected class path: {path}")
+
+
+def _require(val: _T | None) -> _T:
+    if val is None:
+        raise ValueError("Unexpected None value")
+    return val
 
 
 class SB3ConfigTest(absltest.TestCase):
@@ -88,6 +98,77 @@ class SB3ConfigTest(absltest.TestCase):
             ["out/rep_0/model.zip", "out/rep_1/model.zip"],
         )
         self.assertEqual(seeds, [10, 20])
+
+    def test_replicate_paths_resolution(self) -> None:
+        cfg_by_key = {
+            "replicate_config": {
+                "num_replicates": 2,
+                "replicate_start_id": 0,
+                "replicate_signature": "rep_{rep_id}",
+            },
+            "single_pipeline_config": {
+                "experiment_id": "test_rep_exp",
+                "save_config": {"models_dir": "out", "model_name": "agent"},
+                "algo_config": {"algorithm": "stable_baselines3.PPO"},
+                "vec_config": {"n_envs": 2},
+                "callback_config": {
+                    "eval_callback_config": {
+                        "eval_freq": 100,
+                        "n_eval_episodes": 10,
+                        "log_path": "eval",
+                    },
+                    "ckpt_callback_config": {
+                        "save_freq": 1000,
+                        "save_path": "ckpts",
+                    },
+                },
+            },
+        }
+        rep_cfg = SB3ReplicatePipelineConfig.model_validate(cfg_by_key)
+        rep0 = rep_cfg.ind_pipeline_configs[0]
+        rep1 = rep_cfg.ind_pipeline_configs[1]
+        rep0_vec = _require(rep0.vec_config)
+        rep0_cb = _require(rep0.callback_config)
+        rep1_cb = _require(rep1.callback_config)
+        rep1_ckpt = _require(rep1_cb.ckpt_callback_config)
+        self.assertEqual(
+            rep0_vec.monitor_dir,
+            "out/test_rep_exp/agent_1.0M/rep_0/monitor",
+        )
+        self.assertEqual(
+            rep0_cb.eval_callback_config.log_path,
+            "out/test_rep_exp/agent_1.0M/rep_0/eval",
+        )
+        self.assertEqual(
+            rep1_ckpt.save_path,
+            "out/test_rep_exp/agent_1.0M/rep_1/ckpts",
+        )
+
+    def test_single_pipeline_paths_resolution(self) -> None:
+        cfg_by_key = {
+            "experiment_id": "single_exp",
+            "save_config": {"models_dir": "out", "model_name": "agent"},
+            "algo_config": {"algorithm": "stable_baselines3.PPO"},
+            "vec_config": {"n_envs": 1},
+            "callback_config": {
+                "eval_callback_config": {
+                    "eval_freq": 50,
+                    "n_eval_episodes": 5,
+                    "log_path": "eval",
+                },
+            },
+        }
+        pipe_cfg = SB3PipelineConfig.model_validate(cfg_by_key)
+        cb_cfg = _require(pipe_cfg.callback_config)
+        eval_cb = cb_cfg.eval_callback_config
+        self.assertEqual(
+            eval_cb.log_path,
+            "out/single_exp/agent_1.0M/eval",
+        )
+        self.assertEqual(
+            eval_cb.best_model_save_path,
+            "out/single_exp/agent_1.0M",
+        )
 
 
 if __name__ == "__main__":

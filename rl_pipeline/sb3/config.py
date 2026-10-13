@@ -12,15 +12,13 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_serializer,
     field_validator,
     model_validator,
 )
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from rl_pipeline.core import ReplicateConfig, SaveConfig
 from rl_pipeline.core.config import YAMLReaderMixin
-from rl_pipeline.core.utils.io import format_large_number, get_class
+from rl_pipeline.core.utils.io import format_large_number
 from rl_pipeline.gymnasium.config import (
     MakeEnvConfig,
     WrapperConfig,
@@ -29,76 +27,19 @@ from rl_pipeline.gymnasium.config import (
 from .algo_config import (
     SB3AlgorithmConfig,
     SB3LearnConfig,
-    class_to_string,
 )
 from .callback_config import (
     ArbitraryCallbackConfig,
     SB3CallbackConfig,
 )
-from .experiment.base import SB3ExperimentManager
 from .ingestion import ingest_pipeline_config_dict
+from .manager_config import SB3ExperimentManagerConfig
 from .optuna_config import (
     SB3OptunaConfig,
     SB3OptunaDashboardConfig,
     SB3OptunaParamConfig,
 )
-
-
-class MakeVecEnvConfig(BaseModel, YAMLReaderMixin):
-    """Configuration for vectorized environment creation."""
-
-    n_envs: int = Field(ge=1, default=1)
-    seed: int | None = None
-    start_index: int = Field(ge=0, default=0)
-    monitor_dir: str | None = None
-    vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None = SubprocVecEnv
-    vec_env_kwargs: dict[str, Any] | None = None
-    monitor_kwargs: dict[str, Any] | None = None
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
-
-    @field_validator("vec_env_cls", mode="before")
-    def _resolve_vec_env_cls(
-        cls, val: Any
-    ) -> type[SubprocVecEnv | DummyVecEnv] | None:
-        if isinstance(val, str):
-            if val == "SubprocVecEnv":
-                return SubprocVecEnv
-            if val == "DummyVecEnv":
-                return DummyVecEnv
-            if "." in val:
-                return get_class(val)
-        return val
-
-    @field_serializer("vec_env_cls", when_used="json")
-    def serialize_vec_env_cls(
-        self, vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None
-    ) -> str | None:
-        """Serialize vector environment class into class string."""
-        return class_to_string(vec_env_cls) if vec_env_cls else None
-
-
-class SB3ExperimentManagerConfig(BaseModel, YAMLReaderMixin):
-    """Configuration for experiment manager integration."""
-
-    manager_class: type[SB3ExperimentManager]
-    manager_config: dict[str, Any] = Field(default_factory=dict)
-    callback_config: dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
-
-    @field_validator("manager_class", mode="before")
-    def _resolve_manager_class(cls, val: Any) -> type[SB3ExperimentManager]:
-        if isinstance(val, str):
-            return get_class(val)
-        return val
-
-    @field_serializer("manager_class", when_used="json")
-    def serialize_manager_class(
-        self, manager_class: type[SB3ExperimentManager]
-    ) -> str:
-        """Serialize manager class into class string."""
-        return class_to_string(manager_class)
+from .vec_config import MakeVecEnvConfig
 
 
 class SB3ModelConfig(BaseModel, YAMLReaderMixin):
@@ -172,25 +113,46 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
             replicate_signature=replicate_signature,
         )
 
-        if self.vec_config is not None and not self.vec_config.monitor_dir:
+        if self.vec_config is not None and not (
+            self.vec_config.monitor_dir
+            and Path(self.vec_config.monitor_dir).is_absolute()
+        ):
             self.vec_config.monitor_dir = self.save_config.monitor_save_dir
 
         if self.callback_config is not None:
             eval_cb = self.callback_config.eval_callback_config
-            if not eval_cb.best_model_save_path:
-                eval_cb.best_model_save_path = self.save_config.eval_save_dir
-            if not eval_cb.log_path:
-                eval_cb.log_path = self.save_config.eval_save_dir
-            if (
-                self.callback_config.ckpt_callback_config
-                and not self.callback_config.ckpt_callback_config.save_path
+            if not (
+                eval_cb.best_model_save_path
+                and Path(eval_cb.best_model_save_path).is_absolute()
             ):
-                self.callback_config.ckpt_callback_config.save_path = (
-                    self.save_config.model_save_dir
-                )
+                eval_cb.best_model_save_path = self.save_config.model_save_dir
+            if not (eval_cb.log_path and Path(eval_cb.log_path).is_absolute()):
+                eval_cb.log_path = self.save_config.eval_save_dir
+            if self.callback_config.ckpt_callback_config:
+                ckpt_cb = self.callback_config.ckpt_callback_config
+                if not (
+                    ckpt_cb.save_path and Path(ckpt_cb.save_path).is_absolute()
+                ):
+                    sub_dir = (
+                        Path(ckpt_cb.save_path).name
+                        if ckpt_cb.save_path
+                        else "ckpts"
+                    )
+                    ckpt_cb.save_path = str(
+                        Path(self.save_config.model_save_dir) / sub_dir
+                    )
             vrec_cb = self.callback_config.video_recorder_callback_config
-            if vrec_cb and not vrec_cb.save_dir:
-                vrec_cb.save_dir = self.save_config.animation_save_path
+            if vrec_cb and not (
+                vrec_cb.save_dir and Path(vrec_cb.save_dir).is_absolute()
+            ):
+                sub_dir = (
+                    Path(vrec_cb.save_dir).name
+                    if vrec_cb.save_dir
+                    else "ckpts"
+                )
+                vrec_cb.save_dir = str(
+                    Path(self.save_config.model_save_dir) / sub_dir
+                )
 
         return self
 
@@ -229,7 +191,7 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
     """Configuration for running multiple independent SB3 pipeline replicas."""
 
     replicate_config: ReplicateConfig
-    single_pipeline_config: SB3PipelineConfig | dict[str, Any] | None = None
+    single_pipeline_config: dict[str, Any] | SB3PipelineConfig | None = None
     ind_pipeline_configs: list[SB3PipelineConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
@@ -308,6 +270,15 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
 
         self.ind_pipeline_configs = replicate_pipeline_configs
         return self
+
+    @property
+    def single_config(self) -> SB3PipelineConfig | None:
+        """Single pipeline configuration converted to SB3PipelineConfig."""
+        if self.single_pipeline_config is None:
+            return None
+        if isinstance(self.single_pipeline_config, SB3PipelineConfig):
+            return self.single_pipeline_config
+        return SB3PipelineConfig.from_dict(self.single_pipeline_config)
 
     @model_validator(mode="after")
     def _auto_build(self) -> Self:
