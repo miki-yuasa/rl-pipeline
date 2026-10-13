@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""Configuration models for SB3 training, eval, and replicate pipelines."""
 
-"""Configuration models for SB3 training, evaluation, and replicate pipelines."""
+from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
@@ -67,14 +67,14 @@ class MakeVecEnvConfig(BaseModel, YAMLReaderMixin):
             if val == "DummyVecEnv":
                 return DummyVecEnv
             if "." in val:
-                resolved = get_class(val)
-                return resolved
+                return get_class(val)
         return val
 
     @field_serializer("vec_env_cls", when_used="json")
     def serialize_vec_env_cls(
         self, vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None
     ) -> str | None:
+        """Serialize vector environment class into class string."""
         return class_to_string(vec_env_cls) if vec_env_cls else None
 
 
@@ -90,14 +90,14 @@ class SB3ExperimentManagerConfig(BaseModel, YAMLReaderMixin):
     @field_validator("manager_class", mode="before")
     def _resolve_manager_class(cls, val: Any) -> type[SB3ExperimentManager]:
         if isinstance(val, str):
-            resolved = get_class(val)
-            return resolved
+            return get_class(val)
         return val
 
     @field_serializer("manager_class", when_used="json")
     def serialize_manager_class(
         self, manager_class: type[SB3ExperimentManager]
     ) -> str:
+        """Serialize manager class into class string."""
         return class_to_string(manager_class)
 
 
@@ -133,13 +133,14 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
     @model_validator(mode="before")
     @classmethod
     def load_ingested_data(cls, data: Any) -> Any:
+        """Ingest external configuration references before model validation."""
         if isinstance(data, Mapping):
             return ingest_pipeline_config_dict(data)
         return data
 
     @classmethod
     def from_yaml(cls, filepath: str | Path) -> Self:
-        """Load configuration from a YAML file with base directory inference.
+        """Load configuration from a YAML file.
 
         Args:
             filepath: Path to the YAML file.
@@ -150,8 +151,6 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
         path = Path(filepath)
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        if isinstance(data, dict) and "config_dir" not in data:
-            data["config_dir"] = str(path.parent)
         return cls.model_validate(data)
 
     @field_validator("device", mode="before")
@@ -161,7 +160,7 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
         return str(val)
 
     def resolve(self, replicate_signature: str = "") -> Self:
-        """Propagate artifact paths across save, vec, and callback configurations."""
+        """Propagate artifact paths across save, vec, and callbacks."""
         model_name_suffix = (
             format_large_number(self.learn_config.total_timesteps)
             if self.learn_config
@@ -189,13 +188,9 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
                 self.callback_config.ckpt_callback_config.save_path = (
                     self.save_config.model_save_dir
                 )
-            if (
-                self.callback_config.video_recorder_callback_config
-                and not self.callback_config.video_recorder_callback_config.save_dir
-            ):
-                self.callback_config.video_recorder_callback_config.save_dir = (
-                    self.save_config.animation_save_path
-                )
+            vrec_cb = self.callback_config.video_recorder_callback_config
+            if vrec_cb and not vrec_cb.save_dir:
+                vrec_cb.save_dir = self.save_config.animation_save_path
 
         return self
 
@@ -252,14 +247,10 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
         path = Path(filepath)
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        if isinstance(data, dict):
-            single = data.get("single_pipeline_config")
-            if isinstance(single, dict) and "config_dir" not in single:
-                single["config_dir"] = str(path.parent)
         return cls.model_validate(data)
 
     def build_replicates(self) -> Self:
-        """Build independent pipeline configurations from single_pipeline_config."""
+        """Build independent configs from single_pipeline_config."""
         if not self.single_pipeline_config or self.ind_pipeline_configs:
             return self
 
@@ -279,17 +270,23 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
                 replica = SB3PipelineConfig.from_dict(replica_dict)
                 replica.resolve(replicate_signature=rep_signature)
             else:
+                is_pipeline_cfg = isinstance(
+                    self.single_pipeline_config, SB3PipelineConfig
+                )
                 base_cfg = (
                     self.single_pipeline_config
-                    if isinstance(self.single_pipeline_config, SB3PipelineConfig)
-                    else SB3PipelineConfig.from_dict(self.single_pipeline_config)
+                    if is_pipeline_cfg
+                    else SB3PipelineConfig.from_dict(
+                        self.single_pipeline_config
+                    )
                 )
                 replica = deepcopy(base_cfg)
                 replica.resolve(replicate_signature=rep_signature)
-                if replica.wrapper_config and replica.wrapper_config.wrapper_kwargs:
-                    replica.wrapper_config.wrapper_kwargs = (
+                wrap_cfg = replica.wrapper_config
+                if wrap_cfg and wrap_cfg.wrapper_kwargs:
+                    wrap_cfg.wrapper_kwargs = (
                         _format_templates_recursive(
-                            replica.wrapper_config.wrapper_kwargs,
+                            wrap_cfg.wrapper_kwargs,
                             replicate_signature=rep_signature,
                             rep_id=actual_rep_id,
                         )

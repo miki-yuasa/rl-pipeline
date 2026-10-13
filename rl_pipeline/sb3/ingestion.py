@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """Pre-validation ingestion and dictionary resolution for SB3 pipelines."""
 
-import os
+from __future__ import annotations
+
+import warnings
 from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,7 @@ def _resolve_config_dir(
     data_by_key: Mapping[str, Any],
     base_dir: Path | str | None = None,
 ) -> str | None:
-    """Extract configuration directory from dictionary or fallback to base directory.
+    """Extract configuration dir from mapping or fallback to base directory.
 
     Args:
         data_by_key: Raw configuration mapping to extract from.
@@ -25,6 +25,13 @@ def _resolve_config_dir(
     """
     config_dir = data_by_key.get("config_dir")
     if config_dir is not None:
+        warnings.warn(
+            "`config_dir` is deprecated and will be removed in a future"
+            " release. Please specify file paths relative to your workspace"
+            " root or as absolute paths.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return str(config_dir)
     if base_dir is not None:
         return str(base_dir)
@@ -43,7 +50,9 @@ def _resolve_env_config(
     """
     if "env_config" not in data_by_key and "env_config_file" in data_by_key:
         env_file = data_by_key.pop("env_config_file")
-        env_path = os.path.join(config_dir, env_file) if config_dir else env_file
+        env_path = (
+            str(Path(config_dir) / env_file) if config_dir else str(env_file)
+        )
         data_by_key["env_config"] = MakeEnvConfig.from_yaml(env_path)
     else:
         data_by_key.pop("env_config_file", None)
@@ -53,7 +62,7 @@ def _resolve_model_config(
     data_by_key: MutableMapping[str, Any],
     config_dir: str | None,
 ) -> None:
-    """Resolve and inline algorithm and learning configs from model file reference.
+    """Resolve algorithm and learning configs from model file reference.
 
     Args:
         data_by_key: Raw configuration mapping to modify in-place.
@@ -63,7 +72,9 @@ def _resolve_model_config(
         return
 
     model_file = data_by_key.pop("model_config_file")
-    model_path = os.path.join(config_dir, model_file) if config_dir else model_file
+    model_path = (
+        str(Path(config_dir) / model_file) if config_dir else str(model_file)
+    )
 
     from rl_pipeline.sb3.config import SB3ModelConfig
 
@@ -109,7 +120,7 @@ def ingest_pipeline_config_dict(
         base_dir: Optional base directory to resolve relative file paths.
 
     Returns:
-        Clean dictionary with resolved configuration objects and stripped file keys.
+        Clean dictionary with resolved configuration objects and stripped keys.
     """
     resolved_by_key = dict(data_by_key)
     config_dir = _resolve_config_dir(resolved_by_key, base_dir)
