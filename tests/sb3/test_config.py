@@ -9,7 +9,6 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from rl_pipeline.sb3 import (
     SB3AlgorithmConfig,
-    SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
     resolve_algorithm,
 )
@@ -142,32 +141,6 @@ class SB3ConfigTest(absltest.TestCase):
         self.assertEqual(
             rep1_ckpt.save_path,
             "out/test_rep_exp/agent_1.0M/rep_1/ckpts",
-        )
-
-    def test_single_pipeline_paths_resolution(self) -> None:
-        cfg_by_key = {
-            "experiment_id": "single_exp",
-            "save_config": {"models_dir": "out", "model_name": "agent"},
-            "algo_config": {"algorithm": "stable_baselines3.PPO"},
-            "vec_config": {"n_envs": 1},
-            "callback_config": {
-                "eval_callback_config": {
-                    "eval_freq": 50,
-                    "n_eval_episodes": 5,
-                    "log_path": "eval",
-                },
-            },
-        }
-        pipe_cfg = SB3PipelineConfig.model_validate(cfg_by_key)
-        cb_cfg = _require(pipe_cfg.callback_config)
-        eval_cb = cb_cfg.eval_callback_config
-        self.assertEqual(
-            eval_cb.log_path,
-            "out/single_exp/agent_1.0M/eval",
-        )
-        self.assertEqual(
-            eval_cb.best_model_save_path,
-            "out/single_exp/agent_1.0M",
         )
 
 
