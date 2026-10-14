@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, TypeVar
+from typing import TypeVar
 from unittest import mock
 
 from absl.testing import absltest
@@ -27,8 +27,12 @@ class _DummyAlgo(BaseAlgorithm):
     """Dummy algorithm class for resolution testing."""
 
 
+class _DummyWrapper(Wrapper):
+    """Gymnasium wrapper dummy for testing."""
+
+
 class _DummyWrapperConfig(BaseWrapperConfig):
-    """Configuration model for dummy wrapper delegation tests."""
+    """Configuration model for dummy wrapper tests."""
 
     scale: float = 1.0
 
@@ -38,14 +42,6 @@ class _DummyWrapperConfig(BaseWrapperConfig):
             wrapper_class=_DummyWrapper,
             wrapper_kwargs={"scale": self.scale},
         )
-
-
-class _DummyWrapper(Wrapper):
-    """Gymnasium wrapper dummy for wrapper delegation testing."""
-
-    wrapper_config_class: ClassVar[
-        type[BaseWrapperConfig]
-    ] = _DummyWrapperConfig
 
 
 class _CustomPipelineConfig(SB3PipelineConfig):
@@ -177,11 +173,11 @@ class SB3ConfigTest(absltest.TestCase):
             "out/test_rep_exp/agent_1.0M/rep_1/ckpts",
         )
 
-    def test_load_wrapper_config_delegates_to_wrapper_config_class(
+    def test_load_wrapper_config_with_base_wrapper_config(
         self,
     ) -> None:
         res = _require(
-            load_wrapper_config({"_target_": _DummyWrapper, "scale": 2.5})
+            load_wrapper_config({"_target_": _DummyWrapperConfig, "scale": 2.5})
         )
         self.assertIs(res.wrapper_class, _DummyWrapper)
         self.assertEqual(res.wrapper_kwargs, {"scale": 2.5})

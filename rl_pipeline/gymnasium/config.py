@@ -240,24 +240,14 @@ def load_wrapper_config(
         if isinstance(wrapper_target, str)
         else wrapper_target
     )
-    if isinstance(target_cls, type):
-        config_cls = (
-            target_cls
-            if issubclass(target_cls, BaseWrapperConfig)
-            else getattr(target_cls, "wrapper_config_class", None)
-            or getattr(target_cls, "config_class", None)
-        )
-        if isinstance(config_cls, str):
-            config_cls = get_class(config_cls)
-        if (
-            isinstance(config_cls, type)
-            and issubclass(config_cls, BaseWrapperConfig)
-        ):
-            typed_cfg = config_cls.model_validate(config_by_key)
-            res_cfg = typed_cfg.to_wrapper_config()
-            if wrapper_kwargs_override:
-                res_cfg.wrapper_kwargs.update(wrapper_kwargs_override)
-            return res_cfg
+    if isinstance(target_cls, type) and issubclass(
+        target_cls, BaseWrapperConfig
+    ):
+        typed_cfg = target_cls.model_validate(config_by_key)
+        res_cfg = typed_cfg.to_wrapper_config()
+        if wrapper_kwargs_override:
+            res_cfg.wrapper_kwargs.update(wrapper_kwargs_override)
+        return res_cfg
 
     raw_kwargs = (
         config_by_key["wrapper_kwargs"]
