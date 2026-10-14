@@ -247,7 +247,12 @@ def load_wrapper_config(
             else getattr(target_cls, "wrapper_config_class", None)
             or getattr(target_cls, "config_class", None)
         )
-        if config_cls is not None and issubclass(config_cls, BaseWrapperConfig):
+        if isinstance(config_cls, str):
+            config_cls = get_class(config_cls)
+        if (
+            isinstance(config_cls, type)
+            and issubclass(config_cls, BaseWrapperConfig)
+        ):
             typed_cfg = config_cls.model_validate(config_by_key)
             res_cfg = typed_cfg.to_wrapper_config()
             if wrapper_kwargs_override:
