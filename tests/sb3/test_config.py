@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 from unittest import mock
 
 from absl.testing import absltest
+from gymnasium import Wrapper
 from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 
+from rl_pipeline.gymnasium.config import (
+    BaseWrapperConfig,
+    WrapperConfig,
+    load_wrapper_config,
+)
 from rl_pipeline.sb3 import (
     SB3AlgorithmConfig,
+    SB3PipelineConfig,
     SB3ReplicatePipelineConfig,
     resolve_algorithm,
 )
@@ -18,6 +25,33 @@ _T = TypeVar("_T")
 
 class _DummyAlgo(BaseAlgorithm):
     """Dummy algorithm class for resolution testing."""
+
+
+class _DummyWrapperConfig(BaseWrapperConfig):
+    """Configuration model for dummy wrapper delegation tests."""
+
+    scale: float = 1.0
+
+    def to_wrapper_config(self) -> WrapperConfig:
+        """Standard wrapper configuration conversion."""
+        return WrapperConfig(
+            wrapper_class=_DummyWrapper,
+            wrapper_kwargs={"scale": self.scale},
+        )
+
+
+class _DummyWrapper(Wrapper):
+    """Gymnasium wrapper dummy for wrapper delegation testing."""
+
+    wrapper_config_class: ClassVar[
+        type[BaseWrapperConfig]
+    ] = _DummyWrapperConfig
+
+
+class _CustomPipelineConfig(SB3PipelineConfig):
+    """Custom SB3 pipeline configuration subclass for replication testing."""
+
+    custom_flag: bool = True
 
 
 def _mock_get_class(path: str) -> type[BaseAlgorithm]:
@@ -141,6 +175,34 @@ class SB3ConfigTest(absltest.TestCase):
         self.assertEqual(
             rep1_ckpt.save_path,
             "out/test_rep_exp/agent_1.0M/rep_1/ckpts",
+        )
+
+    def test_load_wrapper_config_delegates_to_wrapper_config_class(
+        self,
+    ) -> None:
+        res = _require(
+            load_wrapper_config({"_target_": _DummyWrapper, "scale": 2.5})
+        )
+        self.assertIs(res.wrapper_class, _DummyWrapper)
+        self.assertEqual(res.wrapper_kwargs, {"scale": 2.5})
+
+    def test_replicate_with_custom_pipeline_target(self) -> None:
+        cfg_by_key = {
+            "replicate_config": {
+                "num_replicates": 2,
+                "replicate_start_id": 0,
+                "replicate_signature": "rep_{rep_id}",
+            },
+            "single_pipeline_config": {
+                "_target_": _CustomPipelineConfig,
+                "experiment_id": "custom_{replicate_signature}",
+                "algo_config": {"algorithm": "stable_baselines3.PPO"},
+            },
+        }
+        rep_cfg = SB3ReplicatePipelineConfig.model_validate(cfg_by_key)
+        self.assertLen(rep_cfg.ind_pipeline_configs, 2)
+        self.assertIsInstance(
+            rep_cfg.ind_pipeline_configs[0], _CustomPipelineConfig
         )
 
 

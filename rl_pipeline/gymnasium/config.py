@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Gymnasium environment and wrapper configuration models."""
+
+from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -95,7 +95,7 @@ class WrapperConfig(BaseModel, YAMLReaderMixin):
 
 
 class BaseWrapperConfig(BaseModel, YAMLReaderMixin):
-    """Base configuration model for strongly-typed Gymnasium environment wrappers."""
+    """Base configuration model for strongly-typed environment wrappers."""
 
     wrapper_class: ClassVar[type[Wrapper] | str | None] = None
     _target_: type[Wrapper] | str | None = None
@@ -109,12 +109,12 @@ class BaseWrapperConfig(BaseModel, YAMLReaderMixin):
             Resolved Wrapper class.
 
         Raises:
-            ValueError: If wrapper class is unspecified or not a Wrapper subclass.
+            ValueError: If wrapper class is invalid or unspecified.
         """
         target = self._target_ or self.wrapper_class
         if target is None:
             raise ValueError(
-                f"{self.__class__.__name__} must specify `wrapper_class` or `_target_`."
+                f"{self.__class__.__name__} requires wrapper_class or _target_."
             )
         if isinstance(target, str):
             resolved = get_class(target)
@@ -175,7 +175,12 @@ class GymEnvConfig(BaseModel, YAMLReaderMixin):
 
 def load_wrapper_config(
     data_or_path: (
-        str | Path | Mapping[str, Any] | WrapperConfig | BaseWrapperConfig | None
+        str
+        | Path
+        | Mapping[str, Any]
+        | WrapperConfig
+        | BaseWrapperConfig
+        | None
     ),
     config_dir: str | Path | None = None,
     wrapper_kwargs_override: Mapping[str, Any] | None = None,
@@ -186,8 +191,8 @@ def load_wrapper_config(
     Args:
         data_or_path: File path, mapping, or wrapper configuration model.
         config_dir: Optional base directory if data_or_path is a relative path.
-        wrapper_kwargs_override: Optional dictionary of keyword arguments to overlay.
-        default_wrapper_class: Optional fallback wrapper class if none is specified.
+        wrapper_kwargs_override: Optional dict of keyword arguments to overlay.
+        default_wrapper_class: Optional fallback wrapper class.
 
     Returns:
         Instantiated WrapperConfig with resolved class and arguments, or None.
@@ -211,7 +216,9 @@ def load_wrapper_config(
 
     if isinstance(data_or_path, (str, Path)):
         resolved_path = (
-            Path(config_dir) / data_or_path if config_dir else Path(data_or_path)
+            Path(config_dir) / data_or_path
+            if config_dir
+            else Path(data_or_path)
         )
         with resolved_path.open("r", encoding="utf-8") as f:
             config_by_key = yaml.safe_load(f) or {}
@@ -233,12 +240,19 @@ def load_wrapper_config(
         if isinstance(wrapper_target, str)
         else wrapper_target
     )
-    if isinstance(target_cls, type) and issubclass(target_cls, BaseWrapperConfig):
-        typed_cfg = target_cls.model_validate(config_by_key)
-        res_cfg = typed_cfg.to_wrapper_config()
-        if wrapper_kwargs_override:
-            res_cfg.wrapper_kwargs.update(wrapper_kwargs_override)
-        return res_cfg
+    if isinstance(target_cls, type):
+        config_cls = (
+            target_cls
+            if issubclass(target_cls, BaseWrapperConfig)
+            else getattr(target_cls, "wrapper_config_class", None)
+            or getattr(target_cls, "config_class", None)
+        )
+        if config_cls is not None and issubclass(config_cls, BaseWrapperConfig):
+            typed_cfg = config_cls.model_validate(config_by_key)
+            res_cfg = typed_cfg.to_wrapper_config()
+            if wrapper_kwargs_override:
+                res_cfg.wrapper_kwargs.update(wrapper_kwargs_override)
+            return res_cfg
 
     raw_kwargs = (
         config_by_key["wrapper_kwargs"]

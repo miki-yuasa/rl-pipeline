@@ -18,7 +18,7 @@ from pydantic import (
 
 from rl_pipeline.core import ReplicateConfig, SaveConfig
 from rl_pipeline.core.config import YAMLReaderMixin
-from rl_pipeline.core.utils.io import format_large_number
+from rl_pipeline.core.utils.io import format_large_number, get_class
 from rl_pipeline.gymnasium.config import (
     MakeEnvConfig,
     WrapperConfig,
@@ -187,11 +187,29 @@ def _format_templates_recursive(
     return data
 
 
+def _resolve_pipeline_cls(
+    pipeline_by_key: Mapping[str, Any],
+) -> type[SB3PipelineConfig]:
+    """Resolve custom pipeline config class from _target_ if present."""
+    if "_target_" in pipeline_by_key:
+        raw_target = pipeline_by_key["_target_"]
+        target = (
+            get_class(raw_target)
+            if isinstance(raw_target, str)
+            else raw_target
+        )
+        if isinstance(target, type) and issubclass(target, SB3PipelineConfig):
+            return target
+    return SB3PipelineConfig
+
+
 class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
     """Configuration for running multiple independent SB3 pipeline replicas."""
 
     replicate_config: ReplicateConfig
-    single_pipeline_config: dict[str, Any] | SB3PipelineConfig | None = None
+    single_pipeline_config: dict[str, Any] | SB3PipelineConfig | None = Field(
+        default=None, union_mode="left_to_right"
+    )
     ind_pipeline_configs: list[SB3PipelineConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
@@ -229,7 +247,9 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
                     replicate_signature=rep_signature,
                     rep_id=actual_rep_id,
                 )
-                replica = SB3PipelineConfig.from_dict(replica_dict)
+                pipeline_cls = _resolve_pipeline_cls(replica_dict)
+                replica_dict.pop("_target_", None)
+                replica = pipeline_cls.from_dict(replica_dict)
                 replica.resolve(replicate_signature=rep_signature)
             else:
                 base_cfg = (
@@ -278,7 +298,10 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
             return None
         if isinstance(self.single_pipeline_config, SB3PipelineConfig):
             return self.single_pipeline_config
-        return SB3PipelineConfig.from_dict(self.single_pipeline_config)
+        cfg_dict = deepcopy(self.single_pipeline_config)
+        pipeline_cls = _resolve_pipeline_cls(cfg_dict)
+        cfg_dict.pop("_target_", None)
+        return pipeline_cls.from_dict(cfg_dict)
 
     @model_validator(mode="after")
     def _auto_build(self) -> Self:
