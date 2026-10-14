@@ -201,6 +201,33 @@ class SB3ConfigTest(absltest.TestCase):
             rep_cfg.ind_pipeline_configs[0], _CustomPipelineConfig
         )
 
+    def test_replicate_single_config_formats_templates(self) -> None:
+        cfg_by_key = {
+            "replicate_config": {
+                "num_replicates": 3,
+                "replicate_start_id": 0,
+                "replicate_signature": "rep_{rep_id}",
+            },
+            "single_pipeline_config": {
+                "experiment_id": "exp_{replicate_signature}",
+                "algo_config": {"algorithm": "stable_baselines3.PPO"},
+                "wrapper_config": {
+                    "wrapper_class": "gymnasium.Wrapper",
+                    "wrapper_kwargs": {
+                        "path": "models/{replicate_signature}/best.zip"
+                    },
+                },
+            },
+        }
+        rep_cfg = SB3ReplicatePipelineConfig.model_validate(cfg_by_key)
+        single = _require(rep_cfg.single_config)
+        self.assertEqual(single.experiment_id, "exp_rep_0")
+        single_wrap = _require(single.wrapper_config)
+        self.assertEqual(
+            single_wrap.wrapper_kwargs["path"],
+            "models/rep_0/best.zip",
+        )
+
 
 if __name__ == "__main__":
     absltest.main()

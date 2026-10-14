@@ -294,14 +294,27 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
     @property
     def single_config(self) -> SB3PipelineConfig | None:
         """Single pipeline configuration converted to SB3PipelineConfig."""
+        if self.ind_pipeline_configs:
+            return self.ind_pipeline_configs[0]
         if self.single_pipeline_config is None:
             return None
         if isinstance(self.single_pipeline_config, SB3PipelineConfig):
             return self.single_pipeline_config
-        cfg_dict = deepcopy(self.single_pipeline_config)
+
+        start_id = self.replicate_config.replicate_start_id
+        rep_signature = self.replicate_config.replicate_signature.format(
+            rep_id=start_id
+        )
+        cfg_dict = _format_templates_recursive(
+            deepcopy(self.single_pipeline_config),
+            replicate_signature=rep_signature,
+            rep_id=start_id,
+        )
         pipeline_cls = _resolve_pipeline_cls(cfg_dict)
         cfg_dict.pop("_target_", None)
-        return pipeline_cls.from_dict(cfg_dict)
+        replica = pipeline_cls.from_dict(cfg_dict)
+        replica.resolve(replicate_signature=rep_signature)
+        return replica
 
     @model_validator(mode="after")
     def _auto_build(self) -> Self:
