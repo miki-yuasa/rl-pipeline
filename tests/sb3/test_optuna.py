@@ -1,3 +1,5 @@
+"""Unit tests for Optuna hyperparameter sampling and range validation."""
+
 from __future__ import annotations
 
 import optuna
@@ -9,6 +11,8 @@ from rl_pipeline.sb3.experiment.optuna import sample_params_from_config
 
 
 class SB3OptunaTest(parameterized.TestCase):
+    """Tests for Optuna parameter sampling and range validation."""
+
     def test_sample_params_from_config_transforms_and_indexes(self) -> None:
         trial = optuna.trial.FixedTrial(
             {
@@ -61,7 +65,9 @@ class SB3OptunaTest(parameterized.TestCase):
         params = sample_params_from_config(trial, tune_params)
         self.assertEqual((params["n_steps"], params["gamma"]), (32, 0.99))
         self.assertIs(params["policy_kwargs"]["activation_fn"], nn.ReLU)
-        self.assertEqual(params["wrapper"]["args"]["gain"]["range"], [10.0, 80.0])
+        self.assertEqual(
+            params["wrapper"]["args"]["gain"]["range"], [10.0, 80.0]
+        )
 
     def test_sample_params_from_config_prunes_invalid_range(self) -> None:
         trial = optuna.trial.FixedTrial({"bad_min": 100.0, "bad_max": 10.0})
@@ -83,6 +89,7 @@ class SB3OptunaTest(parameterized.TestCase):
         ]
         with self.assertRaises(optuna.TrialPruned):
             sample_params_from_config(trial, tune_params)
+        self.assertTrue(trial.user_attrs.get("invalid_range"))
 
 
 if __name__ == "__main__":

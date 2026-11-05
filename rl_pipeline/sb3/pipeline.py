@@ -62,7 +62,7 @@ def init_callback(
     callback_config : SB3CallbackConfig
         Callback configuration bundle.
 
-    Returns
+    Returns:
     -------
     callbacks : list[BaseCallback]
         Ordered callback list passed to ``model.learn``.
@@ -112,7 +112,7 @@ class SB3Pipeline(
     verbose : bool, optional
         Verbose logging flag, by default ``True``.
 
-    Examples
+    Examples:
     --------
     Train and evaluate from an explicit config::
 
@@ -222,15 +222,13 @@ class SB3Pipeline(
             self.experiment_manager = manager_class(config=config)
 
     def train(self) -> BaseAlgorithm:
-        """
-        Train the model using the provided training configuration.
+        """Train the model using the provided training configuration.
 
-        Returns
+        Returns:
         -------
         model : BaseAlgorithm
             Trained SB3 model instance.
         """
-
         self._manager_start_run()
 
         train_env: VecEnv = self.env_loader.vec_env()
@@ -257,7 +255,7 @@ class SB3Pipeline(
     def _init_callback(self) -> list[BaseCallback]:
         """Build callback list for training.
 
-        Returns
+        Returns:
         -------
         callbacks : list[BaseCallback]
             Ordered callback instances.
@@ -301,7 +299,7 @@ class SB3Pipeline(
         callbacks : list[BaseCallback]
             Existing callback list.
 
-        Returns
+        Returns:
         -------
         callbacks : list[BaseCallback]
             Callback list with optional manager callback appended.
@@ -324,11 +322,10 @@ class SB3Pipeline(
             pass
 
     def train_on_unsaved_model(self) -> BaseAlgorithm:
-        """
-        Train the model on an unsaved model.
+        """Train the model on an unsaved model.
         This method is a placeholder and should be implemented if needed.
 
-        Returns
+        Returns:
         -------
         model : BaseAlgorithm
             Newly trained model or previously saved model loaded from disk.
@@ -367,7 +364,7 @@ class SB3Pipeline(
         device : str | None, optional
             Device override for model loading.
 
-        Returns
+        Returns:
         -------
         model : BaseAlgorithm
             Loaded SB3 model.
@@ -430,12 +427,11 @@ class SB3Pipeline(
         env : Literal["single", "vec"] | Env, optional
             Evaluation environment selector or explicit env object.
 
-        Returns
+        Returns:
         -------
         eval_result : PolicyEvalStats
             Structured evaluation metrics.
         """
-
         if self.verbose:
             print(f"SB3Pipeline: Evaluating the {checkpoint} model...")
 
@@ -513,8 +509,7 @@ class SB3Pipeline(
         | None = None,
         verbose: bool = True,
     ) -> None:
-        """
-        Record a replay of the model's performance in the evaluation environment.
+        """Record a replay of the model's performance in the evaluation environment.
 
         Parameters
         ----------
@@ -549,12 +544,12 @@ class SB3Pipeline(
             Optional override for optimization configuration. When ``None``,
             ``self.optuna_config`` is used.
 
-        Returns
+        Returns:
         -------
         study : optuna.Study
             Optimized Optuna study object.
 
-        Raises
+        Raises:
         ------
         ValueError
             If Optuna config or required storage/sampler settings are missing.
@@ -568,6 +563,7 @@ class SB3Pipeline(
         )
 
         from .experiment.optuna import (
+            _validate_sampled_ranges,
             deep_update,
             filter_algorithm_kwargs,
             sample_params_from_config,
@@ -664,7 +660,7 @@ class SB3Pipeline(
             trial : optuna.Trial
                 Trial object used for parameter sampling and pruning.
 
-            Returns
+            Returns:
             -------
             objective_value : float
                 Final objective score (mean reward) for the trial.
@@ -673,16 +669,6 @@ class SB3Pipeline(
             eval_env = None
             model: BaseAlgorithm | None = None
             nan_encountered = False
-            trial_artifact_dir = os.path.join(
-                self.save_config.model_save_dir,
-                "optuna_trials",
-                f"trial_{trial.number}",
-            )
-            os.makedirs(trial_artifact_dir, exist_ok=True)
-            best_model_path = os.path.join(trial_artifact_dir, "best_model.zip")
-            final_model_path = os.path.join(
-                trial_artifact_dir, "final_model.zip"
-            )
 
             try:
                 sampled_raw = trial_sampler(trial)
@@ -707,6 +693,7 @@ class SB3Pipeline(
                         deepcopy(self.config.wrapper_config.wrapper_kwargs),
                         sampled_wrapper_kwargs,
                     )
+                    _validate_sampled_ranges(trial_wrapper_kwargs, trial=trial)
                     from rl_pipeline.gymnasium import WrapperConfig
 
                     trial_wrapper_config = WrapperConfig(
@@ -720,6 +707,19 @@ class SB3Pipeline(
                     )
                 else:
                     trial_env_loader = self.env_loader
+
+                trial_artifact_dir = os.path.join(
+                    self.save_config.model_save_dir,
+                    "optuna_trials",
+                    f"trial_{trial.number}",
+                )
+                os.makedirs(trial_artifact_dir, exist_ok=True)
+                best_model_path = os.path.join(
+                    trial_artifact_dir, "best_model.zip"
+                )
+                final_model_path = os.path.join(
+                    trial_artifact_dir, "final_model.zip"
+                )
 
                 is_loss_metric = tune_config.metric != "mean_reward"
                 train_env = trial_env_loader.vec_env()
@@ -784,17 +784,16 @@ class SB3Pipeline(
                             else float("-inf")
                         )
                     return float(eval_callback.last_loss)
-                else:
-                    if (
-                        eval_callback.last_mean_reward is None
-                        or eval_callback.last_mean_reward == -np.inf
-                    ):
-                        return (
-                            float("-inf")
-                            if tune_config.direction == "maximize"
-                            else float("inf")
-                        )
-                    return float(eval_callback.last_mean_reward)
+                if (
+                    eval_callback.last_mean_reward is None
+                    or eval_callback.last_mean_reward == -np.inf
+                ):
+                    return (
+                        float("-inf")
+                        if tune_config.direction == "maximize"
+                        else float("inf")
+                    )
+                return float(eval_callback.last_mean_reward)
 
             finally:
                 if model is not None and model.env is not None:
@@ -900,7 +899,7 @@ class SB3Pipeline(
         out_path : str | Path | None, optional
             Optional path to write the YAML summary.
 
-        Returns
+        Returns:
         -------
         summary : dict[str, Any]
             Best trial statistics and parameter dictionary.
@@ -945,7 +944,7 @@ class SB3ReplicatePipeline:
     verbose : bool, optional
         Verbose logging flag, by default ``True``.
 
-    Examples
+    Examples:
     --------
     Train and evaluate multiple independent runs::
 
@@ -978,7 +977,7 @@ class SB3ReplicatePipeline:
     def train(self) -> list[BaseAlgorithm]:
         """Train all replicate pipelines.
 
-        Returns
+        Returns:
         -------
         models : list[BaseAlgorithm]
             Trained models, one per replicate.
@@ -993,7 +992,7 @@ class SB3ReplicatePipeline:
     def train_on_unsaved_model(self):
         """Train or load each replicate pipeline model.
 
-        Returns
+        Returns:
         -------
         models : list[BaseAlgorithm]
             Models for all replicate pipelines.
@@ -1017,7 +1016,7 @@ class SB3ReplicatePipeline:
     ) -> list[PolicyEvalStats]:
         """Evaluate all replicate pipelines.
 
-        Returns
+        Returns:
         -------
         eval_results : list[PolicyEvalStats]
             Evaluation stats for all replicate runs.
@@ -1042,7 +1041,7 @@ class SB3ReplicatePipeline:
     ) -> list[BaseAlgorithm]:
         """Load models for all replicate pipelines.
 
-        Returns
+        Returns:
         -------
         models : list[BaseAlgorithm]
             Loaded models for each replicate.
@@ -1064,7 +1063,7 @@ class SB3ReplicatePipeline:
     ) -> list[BaseAlgorithm]:
         """Load models for all replicate pipelines.
 
-        Returns
+        Returns:
         -------
         models : list[BaseAlgorithm]
             Loaded models for each replicate.
@@ -1081,8 +1080,7 @@ class SB3ReplicatePipeline:
         | None = None,
         verbose: bool = True,
     ) -> None:
-        """
-        Record a replay of the model's performance in the evaluation environment.
+        """Record a replay of the model's performance in the evaluation environment.
 
         Parameters
         ----------
