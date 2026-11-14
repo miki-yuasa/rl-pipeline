@@ -92,6 +92,34 @@ class SB3EnvLoader(
             monitor_kwargs=self.vec_config.monitor_kwargs,
         )
 
+    def eval_vec_env(
+        self,
+        monitor_dir: str | object | None = None,
+        seed: int | None = None,
+    ) -> VecEnv:
+        """Create a vectorized evaluation environment with an explicit seed.
+
+        Temporarily overrides ``vec_config.seed`` while delegating to
+        ``vec_env`` so loader subclasses overriding only ``vec_env`` preserve
+        signature compatibility and isolate eval seeding from train seeding.
+
+        Args:
+            monitor_dir: Optional monitor directory override for evaluation.
+            seed: Explicit evaluation seed, or None for an unseeded eval env.
+
+        Returns:
+            Vectorized evaluation environment instance.
+        """
+        orig_vec_config = self.vec_config
+        if orig_vec_config is None:
+            return self.vec_env(monitor_dir=monitor_dir)
+
+        self.vec_config = orig_vec_config.model_copy(update={"seed": seed})
+        try:
+            return self.vec_env(monitor_dir=monitor_dir)
+        finally:
+            self.vec_config = orig_vec_config
+
 
 class SB3ModelLoader(
     BaseModelLoader, Generic[WrapperObsType, WrapperActType, ObsType, ActType]

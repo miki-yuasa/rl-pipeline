@@ -189,10 +189,12 @@ class ReplicateConfig(BaseModel, YAMLReaderMixin):
         num_replicates: Total number of replicas to train.
         replicate_start_id: Starting replica index.
         replicate_signature: Template for replica directory name.
+        base_seed: Optional root seed for deterministic replicate seeding.
     """
 
     num_replicates: int = Field(ge=1, default=1)
     replicate_start_id: int = Field(ge=0, default=0)
     replicate_signature: str = "{rep_id}"
+    base_seed: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(extra="allow")

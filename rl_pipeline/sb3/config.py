@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, Self
 
@@ -18,7 +17,8 @@ from pydantic import (
 
 from rl_pipeline.core import ReplicateConfig, SaveConfig
 from rl_pipeline.core.config import YAMLReaderMixin
-from rl_pipeline.core.utils.io import format_large_number, get_class
+from rl_pipeline.core.utils.io import format_large_number
+from rl_pipeline.core.utils.seed import derive_replicate_seed
 from rl_pipeline.gymnasium.config import (
     MakeEnvConfig,
     WrapperConfig,
@@ -39,6 +39,7 @@ from .optuna_config import (
     SB3OptunaDashboardConfig,
     SB3OptunaParamConfig,
 )
+from .replicate_helpers import build_replica_from_source, resolve_base_seed
 from .vec_config import MakeVecEnvConfig
 
 
@@ -161,48 +162,6 @@ class SB3PipelineConfig(BaseModel, YAMLReaderMixin):
         return self.resolve()
 
 
-def _format_templates_recursive(
-    data: Any,
-    replicate_signature: str,
-    rep_id: int,
-) -> Any:
-    """Format template variables recursively in strings, dicts, and lists."""
-    if isinstance(data, str):
-        try:
-            return data.format(
-                replicate_signature=replicate_signature, rep_id=rep_id
-            )
-        except (KeyError, IndexError, ValueError):
-            return data
-    if isinstance(data, dict):
-        return {
-            k: _format_templates_recursive(v, replicate_signature, rep_id)
-            for k, v in data.items()
-        }
-    if isinstance(data, list):
-        return [
-            _format_templates_recursive(v, replicate_signature, rep_id)
-            for v in data
-        ]
-    return data
-
-
-def _resolve_pipeline_cls(
-    pipeline_by_key: Mapping[str, Any],
-) -> type[SB3PipelineConfig]:
-    """Resolve custom pipeline config class from _target_ if present."""
-    if "_target_" in pipeline_by_key:
-        raw_target = pipeline_by_key["_target_"]
-        target = (
-            get_class(raw_target)
-            if isinstance(raw_target, str)
-            else raw_target
-        )
-        if isinstance(target, type) and issubclass(target, SB3PipelineConfig):
-            return target
-    return SB3PipelineConfig
-
-
 class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
     """Configuration for running multiple independent SB3 pipeline replicas."""
 
@@ -235,52 +194,22 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
             return self
 
         replicate_pipeline_configs: list[SB3PipelineConfig] = []
+        base_seed = self.replicate_config.base_seed
         for rep_id in range(self.replicate_config.num_replicates):
             actual_rep_id = rep_id + self.replicate_config.replicate_start_id
             rep_signature = self.replicate_config.replicate_signature.format(
                 rep_id=actual_rep_id
             )
-
-            if isinstance(self.single_pipeline_config, dict):
-                replica_dict = _format_templates_recursive(
-                    deepcopy(self.single_pipeline_config),
-                    replicate_signature=rep_signature,
-                    rep_id=actual_rep_id,
-                )
-                pipeline_cls = _resolve_pipeline_cls(replica_dict)
-                replica_dict.pop("_target_", None)
-                replica = pipeline_cls.from_dict(replica_dict)
-                replica.resolve(replicate_signature=rep_signature)
-            else:
-                base_cfg = (
-                    self.single_pipeline_config
-                    if isinstance(
-                        self.single_pipeline_config, SB3PipelineConfig
-                    )
-                    else SB3PipelineConfig.from_dict(
-                        self.single_pipeline_config
-                    )
-                )
-                replica = deepcopy(base_cfg)
-                replica.resolve(replicate_signature=rep_signature)
-                wrap_cfg = replica.wrapper_config
-                if wrap_cfg and wrap_cfg.wrapper_kwargs:
-                    wrap_cfg.wrapper_kwargs = _format_templates_recursive(
-                        wrap_cfg.wrapper_kwargs,
-                        replicate_signature=rep_signature,
-                        rep_id=actual_rep_id,
-                    )
-
-            base_seed = (
-                replica.algo_config.algo_kwargs.get("seed")
-                if replica.algo_config
-                else None
+            replica = build_replica_from_source(
+                self.single_pipeline_config,
+                replicate_signature=rep_signature,
+                rep_id=actual_rep_id,
+                base_cls=SB3PipelineConfig,
             )
-            if base_seed is None and replica.vec_config:
-                base_seed = replica.vec_config.seed
             if base_seed is None:
-                base_seed = 10
-            rep_seed = int(base_seed) + rep_id * 10
+                base_seed = resolve_base_seed(self.replicate_config, replica)
+
+            rep_seed = derive_replicate_seed(base_seed, actual_rep_id)
             if replica.algo_config:
                 replica.algo_config.algo_kwargs["seed"] = rep_seed
             if replica.vec_config:
@@ -294,27 +223,23 @@ class SB3ReplicatePipelineConfig(BaseModel, YAMLReaderMixin):
     @property
     def single_config(self) -> SB3PipelineConfig | None:
         """Single pipeline configuration converted to SB3PipelineConfig."""
-        if self.ind_pipeline_configs:
-            return self.ind_pipeline_configs[0]
         if self.single_pipeline_config is None:
-            return None
-        if isinstance(self.single_pipeline_config, SB3PipelineConfig):
-            return self.single_pipeline_config
+            return (
+                self.ind_pipeline_configs[0]
+                if self.ind_pipeline_configs
+                else None
+            )
 
         start_id = self.replicate_config.replicate_start_id
         rep_signature = self.replicate_config.replicate_signature.format(
             rep_id=start_id
         )
-        cfg_dict = _format_templates_recursive(
-            deepcopy(self.single_pipeline_config),
+        return build_replica_from_source(
+            self.single_pipeline_config,
             replicate_signature=rep_signature,
             rep_id=start_id,
+            base_cls=SB3PipelineConfig,
         )
-        pipeline_cls = _resolve_pipeline_cls(cfg_dict)
-        cfg_dict.pop("_target_", None)
-        replica = pipeline_cls.from_dict(cfg_dict)
-        replica.resolve(replicate_signature=rep_signature)
-        return replica
 
     @model_validator(mode="after")
     def _auto_build(self) -> Self:

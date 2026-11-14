@@ -24,6 +24,7 @@ class MakeVecEnvConfig(BaseModel, YAMLReaderMixin):
 
     n_envs: int = Field(ge=1, default=1)
     seed: int | None = None
+    eval_seed: int | None = Field(default=None, ge=0)
     start_index: int = Field(ge=0, default=0)
     monitor_dir: str | None = None
     vec_env_cls: type[SubprocVecEnv | DummyVecEnv] | None = SubprocVecEnv

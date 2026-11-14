@@ -46,6 +46,11 @@ if TYPE_CHECKING:
     import optuna
 
 
+def _resolve_eval_seed(config: SB3PipelineConfig) -> int | None:
+    """Return explicit evaluation seed, or None to isolate from train seed."""
+    return config.vec_config.eval_seed if config.vec_config else None
+
+
 def init_callback(
     eval_env: VecEnv,
     video_env: Env | Wrapper,
@@ -266,7 +271,10 @@ class SB3Pipeline(
             else None
         )
         return init_callback(
-            eval_env=self.env_loader.vec_env(monitor_dir=eval_monitor_dir),
+            eval_env=self.env_loader.eval_vec_env(
+                monitor_dir=eval_monitor_dir,
+                seed=_resolve_eval_seed(self.config),
+            ),
             video_env=self.env_loader.env(),
             callback_config=self.callback_configs,
         )
@@ -441,11 +449,17 @@ class SB3Pipeline(
         else:
             model = checkpoint
 
+        eval_seed = _resolve_eval_seed(self.config)
         match env:
             case "single":
                 eval_env = self.env_loader.env()
+                if eval_seed is not None:
+                    eval_env.action_space.seed(eval_seed)
+                    eval_env.reset(seed=eval_seed)
             case "vec":
-                eval_env = self.env_loader.vec_env(monitor_dir=None)
+                eval_env = self.env_loader.eval_vec_env(
+                    monitor_dir=None, seed=eval_seed
+                )
             case Env():
                 eval_env = env
             case _:
@@ -732,7 +746,10 @@ class SB3Pipeline(
                         verbose=0,
                     )
                 else:
-                    eval_env = trial_env_loader.vec_env(monitor_dir=None)
+                    eval_env = trial_env_loader.eval_vec_env(
+                        monitor_dir=None,
+                        seed=_resolve_eval_seed(self.config),
+                    )
                     eval_callback = TrialEvalCallback(
                         eval_env=eval_env,
                         trial=trial,
