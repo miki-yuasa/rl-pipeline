@@ -1,15 +1,34 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from absl.testing import absltest, parameterized
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
 
-from rl_pipeline.sb3 import SB3Pipeline, SB3PipelineConfig
+from rl_pipeline.gymnasium import WrapperConfig
+from rl_pipeline.sb3 import (
+    SB3OptunaConfig,
+    SB3OptunaParamConfig,
+    SB3Pipeline,
+    SB3PipelineConfig,
+)
 from rl_pipeline.sb3 import loader as sb3_loader
 from rl_pipeline.sb3 import pipeline as sb3_pipeline
+
+
+class _CustomEnvLoader(sb3_loader.SB3EnvLoader):
+    """A custom environment loader subclass for Optuna preservation checks."""
+
+
+def _call_base_vec_env(
+    loader: sb3_loader.SB3EnvLoader,
+    monitor_dir: Any = sb3_loader._DEFAULT_MONITOR_DIR,
+) -> VecEnv:
+    return sb3_loader.SB3EnvLoader.vec_env(loader, monitor_dir=monitor_dir)
 
 
 class SB3PipelineTest(parameterized.TestCase):
@@ -159,6 +178,64 @@ class SB3PipelineTest(parameterized.TestCase):
         seeds = [call.kwargs["seed"] for call in mock_make.call_args_list]
         self.assertEqual(seeds, [42, None, 123])
         self.assertEqual(pipeline.env_loader.vec_config.seed, 42)
+
+    def test_optimize_preserves_custom_env_loader_for_wrapper_tuning(
+        self,
+    ) -> None:
+        if self.config.vec_config is None or self.config.algo_config is None:
+            raise ValueError("vec_config and algo_config must be present.")
+        self.config.device = "cpu"
+        self.config.vec_config.n_envs = 1
+        self.config.vec_config.vec_env_cls = DummyVecEnv
+        self.config.vec_config.vec_env_kwargs = {}
+        self.config.algo_config.algo_kwargs.update(
+            n_steps=2, batch_size=2, n_epochs=1
+        )
+        self.config.wrapper_config = WrapperConfig(
+            wrapper_class=TimeLimit,
+            wrapper_kwargs={"max_episode_steps": 10},
+        )
+        pipeline = SB3Pipeline(config=self.config, verbose=False)
+        pipeline.env_loader = _CustomEnvLoader(
+            pipeline.env_loader.env_config,
+            self.config.wrapper_config,
+            self.config.vec_config,
+        )
+        mock_vec_env = self.enter_context(
+            mock.patch.object(
+                _CustomEnvLoader,
+                "vec_env",
+                autospec=True,
+                spec_set=True,
+                side_effect=_call_base_vec_env,
+            )
+        )
+        optuna_config = SB3OptunaConfig(
+            study_name="custom_loader_test",
+            storage_url=f"sqlite:///{self.temp_dir / 'study.db'}",
+            n_trials=1,
+            n_startup_trials=1,
+            n_evaluations=1,
+            n_eval_episodes=1,
+            total_timesteps=2,
+            tune_params=[
+                SB3OptunaParamConfig(
+                    name="max_episode_steps",
+                    target="wrapper_kwargs.max_episode_steps",
+                    suggest_type="categorical",
+                    choices=[17],
+                )
+            ],
+        )
+
+        pipeline.optimize(optuna_config=optuna_config)
+
+        trial_loader = mock_vec_env.call_args.args[0]
+        self.assertIsInstance(trial_loader, _CustomEnvLoader)
+        self.assertEqual(
+            trial_loader.wrapper_config.wrapper_kwargs["max_episode_steps"],
+            17,
+        )
 
 
 if __name__ == "__main__":

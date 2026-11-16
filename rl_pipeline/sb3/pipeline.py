@@ -714,7 +714,12 @@ class SB3Pipeline(
                         wrapper_class=self.config.wrapper_config.wrapper_class,
                         wrapper_kwargs=trial_wrapper_kwargs,
                     )
-                    trial_env_loader = SB3EnvLoader(
+                    loader_cls = (
+                        type(self.env_loader)
+                        if issubclass(type(self.env_loader), SB3EnvLoader)
+                        else SB3EnvLoader
+                    )
+                    trial_env_loader = loader_cls(
                         env_config=self.env_loader.env_config,
                         wrapper_config=trial_wrapper_config,
                         vec_config=self.config.vec_config,
